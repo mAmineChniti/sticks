@@ -5,7 +5,7 @@ use std::fs::{self, File};
 use std::io::{Write, Read};
 use std::env;
 
-fn remove_dependency(dependency_name: &str) {
+fn remove_dependency(_dependency_name: &str) {
     // TODO: implement the removal of dependencies and the install_deps rule if 0 deps are left 
 }
 
@@ -30,21 +30,19 @@ fn create_project(project_name: &str, language: &str) {
 
     // Create Makefile with the appropriate CC variable
     let makefile_content = format!(
-        r#"
-CC = {}
-CFLAGS = -Wall -g
-
-all: clean {}
-
-{}: {}
-    $(CC) $(CFLAGS) -o {} $<
-
-clean:
-    rm -f {}
-"#,
+        "CC = {}\n\
+        CFLAGS = -Wall -g\n\
+        \n\
+        all: clean {}\n\
+        \n\
+        {}: {}\n\
+        \t$(CC) $(CFLAGS) -o {} $<\n\
+        \n\
+        clean:\n\
+        \trm -f {}\n",
         cc, project_name, project_name, source_file, project_name, project_name
     );
-
+    
     // Write "Hello, World!" code based on the selected language
     let hello_world_code = match language {
         "c" => {
