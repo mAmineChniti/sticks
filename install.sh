@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# Check if Rust is installed
+if ! command -v rustc &>/dev/null; then
+    echo "Rust is not installed. Please install Rust before running this script."
+    exit 1
+fi
+
+# Get the host value from the output of `rustc -vV`
+rustc_output=$(rustc -vV)
+host=$(echo "$rustc_output" | awk -F'\n' '/host:/{print $1}' | cut -d' ' -f 2)
+
 # Create a temporary directory and change into it
 temp_dir=$(mktemp -d)
 cd "$temp_dir"
@@ -14,7 +24,7 @@ cd sticks
 if ! dpkg -l | grep -q "build-essential"; then
     # Install build-essential if not already installed (for Debian/Ubuntu)
     sudo apt update
-    sudo apt install build-essential -y
+    sudo apt install build-essential
 fi
 
 # Build the project with Cargo in release mode
@@ -34,7 +44,7 @@ else
 fi
 
 # Build a package using cargo-deb for the detected OS
-cargo deb --target "$os_name"
+cargo deb --target "$host"
 
 # Check if the package is actually generated
 if [ -f "./target/${os_name}"/*.deb ] || [ -f "./target/${os_name}"/*.rpm ]; then
