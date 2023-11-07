@@ -47,11 +47,26 @@ fi
 cargo deb --target "$host"
 
 # Check if the package is actually generated
-if [ -f "./target/${host}/${os_name}"/*.deb ] || [ -f "./target/${host}/${os_name}"/*.rpm ]; then
+if [ -f "./target/${host}/${os_name}"/*.deb ] || [ -f "./target/${host}"/debian/*.deb ]; then
     # Install the generated package using the appropriate package manager
     case $os_name in
-        debian | ubuntu | raspbian)
-            sudo apt install "./target/${host}/${os_name}"/*.deb
+        debian | raspbian)
+            if [ -f "./target/${host}/${os_name}"/*.deb ]; then
+                sudo apt install "./target/${host}/${os_name}"/*.deb
+            elif [ -f "./target/${host}"/debian/*.deb ]; then
+                sudo apt install "./target/${host}"/debian/*.deb
+            else
+                echo "No .deb package found for $os_name."
+            fi
+            ;;
+        ubuntu)
+            if [ -f "./target/${host}/${os_name}"/*.deb ]; then
+                sudo apt install "./target/${host}/${os_name}"/*.deb
+            elif [ -f "./target/${host}"/debian/*.deb ]; then
+                sudo apt install "./target/${host}"/debian/*.deb
+            else
+                echo "No .deb package found for $os_name."
+            fi
             ;;
         fedora)
             sudo dnf install "./target/${host}/${os_name}"/*.rpm
@@ -66,6 +81,7 @@ if [ -f "./target/${host}/${os_name}"/*.deb ] || [ -f "./target/${host}/${os_nam
 else
     echo "Package not generated. Please check the build process."
 fi
+
 
 # Clean up by removing the temporary directory
 cd
