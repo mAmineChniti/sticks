@@ -71,6 +71,13 @@ sticks add <dependency_name>
 
 Replace <dependency_name> with the name of the dependency you want to add. Sticks will automatically modify your Makefile to include the new dependency. If the install-deps rule doesn't exist in your Makefile, Sticks will create it for you.
 
+## To-Do List
+
+- [ ] Implement the removal of dependencies by using the `sticks remove <dependency_name>` command.
+- [ ] Remove the `install-deps` rule when there are no more dependencies left to install.
+- [ ] Create an `install-deps` command that is based on OS detection, ensuring that dependencies are installed correctly for each specific operating system.
+- [ ] Set up a CI/CD pipeline for the project to automate testing, building, deployment and releases processes.
+
 ## Contributing
 
 If you'd like to contribute to Sticks or report issues We welcome contributions and feedback from the community.
