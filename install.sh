@@ -18,11 +18,32 @@ if ! command -v cargo-deb &>/dev/null; then
     cargo install cargo-deb
 fi
 
-# Build a Debian package using cargo-deb
-cargo deb
+# Detect the OS name
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    os_name=$ID
+else
+    os_name=$(uname -s | tr '[:upper:]' '[:lower:]')
+fi
 
-# Install the generated Debian package using apt
-sudo apt install ./target/debian/sticks*.deb
+# Build a package using cargo-deb for the detected OS
+cargo deb --target "$os_name"
+
+# Install the generated package using the appropriate package manager
+case $os_name in
+    debian | ubuntu | raspbian)
+        sudo apt install "./target/${os_name}/*.deb"
+        ;;
+    fedora)
+        sudo dnf install "./target/${os_name}/*.rpm"
+        ;;
+    centos | rhel)
+        sudo yum install "./target/${os_name}/*.rpm"
+        ;;
+    *)
+        echo "Unsupported OS: $os_name. Please install the package manually."
+        ;;
+esac
 
 # Clean up by removing the temporary directory
 cd

@@ -9,10 +9,12 @@ Sticks is a Rust command-line tool for managing C and C++ projects. It simplifie
 - Automatically set up "Hello, World!" code in the chosen language.
 - Easily add and remove dependencies in your Makefile.
 
+**Before proceeding with the quick install, please make sure you have Rust installed. If you don't have Rust installed, you can download and install it from the official [Rust website](https://www.rust-lang.org/tools/install).**
+
 ## Quick Install
 
 ```bash
-
+curl -fsSL https://raw.githubusercontent.com/mAmineChniti/sticks/master/install.sh | bash
 ```
 
 ## Installation
@@ -75,6 +77,6 @@ If you'd like to contribute to Sticks or report issues We welcome contributions 
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE file](https://github.com/mAmineChniti/sticks/LICENSE) for details.
+This project is licensed under the MIT License. See the [LICENSE file](https://github.com/mAmineChniti/sticks/blob/master/LICENSE) for details.
 
 For any inquiries, feel free to email us at [emin.chniti@esprit.tn](mailto:emin.chniti@esprit.tn).
