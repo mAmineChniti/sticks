@@ -33,9 +33,10 @@ fn create_project(project_name: &str, language: &str) {
         r#"
 CC = {}
 CFLAGS = -Wall -g
-all: clean {}
-{}: {}
 
+all: clean {}
+
+{}: {}
     $(CC) $(CFLAGS) -o {} $<
 
 clean:
