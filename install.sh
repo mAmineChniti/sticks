@@ -47,17 +47,17 @@ fi
 cargo deb --target "$host"
 
 # Check if the package is actually generated
-if [ -f "./target/${os_name}"/*.deb ] || [ -f "./target/${os_name}"/*.rpm ]; then
+if [ -f "./target/${host}/${os_name}"/*.deb ] || [ -f "./target/${host}/${os_name}"/*.rpm ]; then
     # Install the generated package using the appropriate package manager
     case $os_name in
         debian | ubuntu | raspbian)
-            sudo apt install "./target/${os_name}"/*.deb
+            sudo apt install "./target/${host}/${os_name}"/*.deb
             ;;
         fedora)
-            sudo dnf install "./target/${os_name}"/*.rpm
+            sudo dnf install "./target/${host}/${os_name}"/*.rpm
             ;;
         centos | rhel)
-            sudo yum install "./target/${os_name}"/*.rpm
+            sudo yum install "./target/${host}/${os_name}"/*.rpm
             ;;
         *)
             echo "Unsupported OS: $os_name. Please install the package manually."
