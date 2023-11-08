@@ -95,7 +95,7 @@ To initialize a new C++ project in the current directory, use:
 sticks init cpp
 ```
 
-These commands will create a new project directory with the specified name, set up a source file, and create a basic Makefile. The source file will contain a "Hello, World!" program in C++ or C, depending on the chosen project type.
+These commands will create a new project based on the current directory name, set up a source file, and create a basic Makefile. The source file will contain a "Hello, World!" program in C++ or C, depending on the chosen project type.
 
 ### Adding a Dependency
 
