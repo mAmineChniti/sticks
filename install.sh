@@ -3,7 +3,7 @@
 # Function to display a progress bar
 function progress_bar {
     local duration=$1
-    local steps=50
+    local steps=100
     local increment=$((duration / steps))
     for ((i = 0; i <= steps; i++)); do
         echo -ne "[$i/$steps] "
