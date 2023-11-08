@@ -9,11 +9,13 @@ fn remove_dependency(_dependency_name: &str) {
     // TODO: implement the removal of dependencies and the install_deps rule if 0 deps are left 
 }
 
-fn create_project(project_name: &str, language: &str) {
+fn create_dir(project_name: &str) {
     // Create project directory
     fs::create_dir(project_name).expect("Failed to create project directory");
     env::set_current_dir(project_name).expect("Failed to change directory");
+}
 
+fn create_project(project_name: &str, language: &str) {
     // Create src directory
     fs::create_dir("src").expect("Failed to create src directory");
 
@@ -42,7 +44,7 @@ fn create_project(project_name: &str, language: &str) {
         \trm -f {}\n",
         cc, project_name, project_name, source_file, project_name, project_name
     );
-    
+
     // Write "Hello, World!" code based on the selected language
     let hello_world_code = match language {
         "c" => {
@@ -77,6 +79,22 @@ int main() {
     // Create the Makefile
     let mut makefile = File::create("Makefile").expect("Failed to create Makefile");
     makefile.write_all(makefile_content.as_bytes()).expect("Failed to write to Makefile");
+}
+
+fn new_project(project_name: &str, language: &str) {
+    create_dir(project_name);
+    create_project(project_name, language);
+}
+
+fn init_project(language: &str) {
+    // Get the current directory name as the project name
+    let current_dir = env::current_dir().expect("Failed to get current directory");
+    let current_dir_name = current_dir
+        .file_name()
+        .expect("Failed to get directory name")
+        .to_str()
+        .expect("Failed to convert to string");
+    create_project(current_dir_name, language);
 }
 
 fn add_dependency(dependency_name: &str) {
@@ -140,6 +158,11 @@ fn main() {
                 .arg(Arg::with_name("project_name").required(true)),
         )
         .subcommand(
+            SubCommand::with_name("init")
+                .about("Initialize a project")
+                .arg(Arg::with_name("language").required(true).possible_values(&["c", "cpp"])),
+        )
+        .subcommand(
             SubCommand::with_name("add")
                 .about("Add a dependency rule to the Makefile")
                 .arg(Arg::with_name("dependency_name").required(true)),
@@ -153,10 +176,13 @@ fn main() {
 
     match matches.subcommand() {
         ("c", Some(sub_m)) => {
-            create_project(sub_m.value_of("project_name").unwrap(), "c");
+            new_project(sub_m.value_of("project_name").unwrap(), "c");
         }
         ("cpp", Some(sub_m)) => {
-            create_project(sub_m.value_of("project_name").unwrap(), "cpp");
+            new_project(sub_m.value_of("project_name").unwrap(), "cpp");
+        }
+        ("init", Some(sub_m)) => {
+            init_project(sub_m.value_of("language").unwrap());
         }
         ("add", Some(sub_m)) => {
             add_dependency(sub_m.value_of("dependency_name").unwrap());

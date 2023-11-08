@@ -61,6 +61,24 @@ Replace <project_name> with the name of your project.
 
 These commands will create a new project directory with the specified name, set up a source file, and create a basic Makefile. The source file will contain a "Hello, World!" program in C++ or C.
 
+### Initializing a Project in the Current Directory
+
+If you want to initialize a new project directly in the current directory, use these commands:
+
+To initialize a new C project in the current directory, use:
+
+```bash
+sticks init c
+```
+
+To initialize a new C++ project in the current directory, use:
+
+```bash
+sticks init cpp
+```
+
+These commands will create a new project directory with the specified name, set up a source file, and create a basic Makefile. The source file will contain a "Hello, World!" program in C++ or C, depending on the chosen project type.
+
 ### Adding a Dependency
 
 To add a dependency to your project's Makefile, use the following command:
