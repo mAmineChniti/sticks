@@ -156,7 +156,7 @@ fn update_project() {
         .expect("Failed to execute update command");
 
     if status.success() {
-        println!("Update successful!");
+        // println!("Update successful!");
     } else {
         eprintln!("Update failed with exit code: {}", status);
     }

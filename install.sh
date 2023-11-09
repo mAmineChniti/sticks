@@ -50,7 +50,7 @@ local_version=$(sticks -v | cut -d ' ' -f 2)
 cargo_toml_version=$(curl -s https://raw.githubusercontent.com/mAmineChniti/sticks/master/Cargo.toml | grep "version" | cut -d '"' -f 2)
 
 # Check if the local version is the latest
-if version_gt "$local_version" "$cargo_toml_version"; then
+if version_gt "$cargo_toml_version" "$local_version"; then
     echo "Latest version of sticks is already installed."
     exit 0
 fi
