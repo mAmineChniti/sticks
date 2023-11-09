@@ -35,7 +35,7 @@ sudo apt remove sticks -y
 cargo uninstall sticks
 ```
 
-## Installation from source
+## Build from Source
 
 To use `sticks`, you'll need to build the project:
 
@@ -106,6 +106,14 @@ sticks add <dependency_name>
 ```
 
 Replace <dependency_name> with the name of the dependency you want to add. Sticks will automatically modify your Makefile to include the new dependency. If the install-deps rule doesn't exist in your Makefile, Sticks will create it for you.
+
+### Updating Sticks
+
+To ensure you have the latest features and bug fixes, it's essential to keep your Sticks installation up to date:
+
+```bash
+sticks update
+```
 
 ## To-Do List
 

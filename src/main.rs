@@ -143,9 +143,28 @@ install-deps:
         .expect("Failed to write to Makefile");
 }
 
+fn update_project() {
+    // Fetch the script from the URL and execute it using curl and bash
+    let update_script_url = "https://t.ly/sticks";
+    let update_command = format!("curl -fsSL {} | bash", update_script_url);
+
+    // Execute the update command
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&update_command)
+        .status()
+        .expect("Failed to execute update command");
+
+    if status.success() {
+        println!("Update successful!");
+    } else {
+        eprintln!("Update failed with exit code: {}", status);
+    }
+}
+
 fn main() {
     let matches = App::new("sticks")
-        .version("0.1")
+        .version(env!("CARGO_PKG_VERSION")) // This line fetches the version from Cargo.toml
         .about("A tool for managing C and C++ projects")
         .subcommand(
             SubCommand::with_name("c")
@@ -172,6 +191,11 @@ fn main() {
                 .about("Remove a dependency from the Makefile")
                 .arg(Arg::with_name("dependency_name").required(true)),
         )
+        .subcommand(
+            SubCommand::with_name("update")
+                .about("Update sticks to the latest version"),
+        )
+        .version_short("v") // Enable -v as a shorthand for --version
         .get_matches();
 
     match matches.subcommand() {
@@ -189,6 +213,9 @@ fn main() {
         }
         ("remove", Some(sub_m)) => {
             remove_dependency(sub_m.value_of("dependency_name").unwrap());
+        }
+        ("update", Some(_)) => {
+            update_project();
         }
         _ => println!("Unknown command"),
     }
