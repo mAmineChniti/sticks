@@ -92,49 +92,60 @@ cd sticks
 if ! dpkg -l | grep -q "build-essential"; then
     # Install build-essential if not already installed (for Debian/Ubuntu)
     echo "Installing build-essential..."
-    sudo apt install build-essential -y || { echo "Error: Unable to install build-essential."; exit 1; }
+    sudo apt install build-essential -y > /dev/null 2>&1 || { echo "Error: Unable to install build-essential."; exit 1; }
     progress_bar 10
 fi
 
 # Build the project with Cargo in release mode
 echo "Building the project with Cargo..."
-cargo build --release || { echo "Error: Cargo build failed."; exit 1; }
+cargo build --release > /dev/null 2>&1 || { echo "Error: Cargo build failed."; exit 1; }
 progress_bar 10
 
 # Install cargo-deb if not already installed
 if ! command -v cargo-deb &>/dev/null; then
     echo "Installing cargo-deb..."
-    cargo install cargo-deb || { echo "Error: Unable to install cargo-deb."; exit 1; }
+    cargo install cargo-deb > /dev/null 2>&1 || { echo "Error: Unable to install cargo-deb."; exit 1; }
     progress_bar 10
 fi
 
+# Detect the OS name
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    os_name=$ID
+else
+    os_name=$(uname -s | tr '[:upper:]' '[:lower:]')
+fi
+
 # Build a package using cargo-deb for the detected OS
-echo "Building a package for $host using cargo-deb..."
-cargo deb --target "$host" || { echo "Error: Cargo deb failed."; exit 1; }
+echo "Building a package for $os_name/$host using cargo-deb..."
+cargo deb --target "$host" > /dev/null 2>&1 || { echo "Error: Cargo deb failed."; exit 1; }
 progress_bar 10
 
-# Check if the package is actually generated
-if [ -f "./target/${host}/${host}"/*.deb ] || [ -f "./target/${host}"/debian/*.deb ]; then
-    # Install the generated package using the appropriate package manager
+# Install the generated package using the appropriate package manager
+if [ -f "./target/${host}/${os_name}"/*.deb ] || [ -f "./target/${host}"/debian/*.deb ]; then
     echo "Installing the generated package..."
-    case $host in
-        x86_64-unknown-linux-gnu)
-            os_name="debian"
+    case $os_name in
+        debian | raspbian)
+            if [ -f "./target/${host}/${os_name}"/*.deb ]; then
+                sudo apt install "./target/${host}/${os_name}"/*.deb -y > /dev/null 2>&1
+            elif [ -f "./target/${host}"/debian/*.deb ]; then
+                sudo apt install "./target/${host}"/debian/*.deb -y > /dev/null 2>&1
+            else
+                echo "No .deb package found for $os_name."
+            fi
+            ;;
+        ubuntu)
+            if [ -f "./target/${host}/${os_name}"/*.deb ]; then
+                sudo apt install "./target/${host}/${os_name}"/*.deb -y > /dev/null 2>&1
+            elif [ -f "./target/${host}"/debian/*.deb ]; then
+                sudo apt install "./target/${host}"/debian/*.deb -y > /dev/null 2>&1
+            else
+                echo "No .deb package found for $os_name."
+            fi
             ;;
         *)
-            echo "Unsupported OS: $host. Please install the package manually."
-            ;;
+            echo "Unsupported OS: $os_name. Please install the package manually."
     esac
-
-    if [ -f "./target/${host}/${host}"/*.deb ]; then
-        sudo apt install "./target/${host}/${host}"/*.deb -y || { echo "Error: Unable to install the generated package."; exit 1; }
-    elif [ -f "./target/${host}"/debian/*.deb ]; then
-        sudo apt install "./target/${host}"/debian/*.deb -y || { echo "Error: Unable to install the generated package."; exit 1; }
-    else
-        echo "No .deb package found for $host."
-    fi
-else
-    echo "Package not generated. Please check the build process."
 fi
 
 # Clean up by removing the temporary directory
