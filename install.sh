@@ -45,19 +45,15 @@ function version_gt {
 
 # Get the version from the output of sticks -v
 local_version=$(sticks -v 2>/dev/null || true)
-if [ -z "$local_version" ]; then
-    echo "sticks command not found or produces no output. Checking if Rust is installed..."
-else
+echo $local_version
+if [[ "$local_version" =~ ^sticks\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     local_version=$(echo "$local_version" | cut -d ' ' -f 2)
-fi
-
-# Fetch the version from Cargo.toml in the repository
-cargo_toml_version=$(curl -s https://raw.githubusercontent.com/mAmineChniti/sticks/master/Cargo.toml | grep "version" | cut -d '"' -f 2)
-
-# Check if the local version is the latest
-if [ -z "$local_version" ] || version_gt "$cargo_toml_version" "$local_version"; then
-    echo "Latest version of sticks is already installed."
-    exit 0
+    # Fetch the version from Cargo.toml in the repository
+    cargo_toml_version=$(curl -s https://raw.githubusercontent.com/mAmineChniti/sticks/master/Cargo.toml | grep "version" | cut -d '"' -f 2)
+    if version_gt "$local_version" "$cargo_toml_version"; then
+        echo "Latest version of sticks is already installed."
+        exit 0
+    fi
 fi
 
 # Check if Rust is installed
