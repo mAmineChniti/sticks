@@ -153,4 +153,4 @@ cd
 rm -rf "$temp_dir"
 
 # Optionally, you can print a message to confirm the installation
-echo "sticks is now installed."
+echo "$(sticks -v) is now installed."
