@@ -130,7 +130,7 @@ if [ -f "$deb_dir"/*.deb ] || [ -f "$debian_dir"/*.deb ]; then
     echo "Attempting to install the generated package..."
 
     case $os_name in
-        debian | raspbian | ubuntu)
+        debian | ubuntu)
             if [ -f "$deb_dir"/*.deb ]; then
                 sudo apt install "$deb_dir"/*.deb -y > /dev/null 2>&1
             elif [ -f "$debian_dir"/*.deb ]; then
