@@ -145,7 +145,7 @@ install-deps:
 
 fn update_project() {
     // Fetch the script from the URL and execute it using curl and bash
-    let update_script_url = "https://t.ly/sticks";
+    let update_script_url = "https://raw.githubusercontent.com/mAmineChniti/sticks/master/install.sh";
     let update_command = format!("curl -fsSL {} | bash", update_script_url);
 
     // Execute the update command
