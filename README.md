@@ -14,7 +14,7 @@ Sticks is a Rust command-line tool for managing C and C++ projects. It simplifie
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mAmineChniti/sticks/master/install.sh | bash
+curl -fsSL https://rb.gy/ltig1b | bash
 ```
 
 **OR**
