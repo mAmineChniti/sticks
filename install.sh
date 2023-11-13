@@ -50,7 +50,7 @@ if [[ "$local_version" =~ ^sticks\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     local_version=$(echo "$local_version" | cut -d ' ' -f 2)
     # Fetch the version from Cargo.toml in the repository
     cargo_toml_version=$(curl -s https://raw.githubusercontent.com/mAmineChniti/sticks/master/Cargo.toml | grep "version" | cut -d '"' -f 2)
-    if version_gt "$local_version" "$cargo_toml_version"; then
+    if version_gt "$cargo_toml_version" "$local_version"; then
         echo "Latest version of sticks is already installed."
         exit 0
     fi
