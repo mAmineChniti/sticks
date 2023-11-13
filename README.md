@@ -107,6 +107,14 @@ sticks add <dependency_name>
 
 Replace <dependency_name> with the name of the dependency you want to add. Sticks will automatically modify your Makefile to include the new dependency. If the install-deps rule doesn't exist in your Makefile, Sticks will create it for you.
 
+### List Subcommands
+
+For additional assistance and to explore available commands, use the help subcommand:
+
+```bash
+sticks help
+```
+
 ### Updating Sticks
 
 To ensure you have the latest features and bug fixes, it's essential to keep your Sticks installation up to date:
