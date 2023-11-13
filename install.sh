@@ -45,14 +45,17 @@ function version_gt {
 
 # Get the version from the output of sticks -v
 local_version=$(sticks -v 2>/dev/null || true)
-echo $local_version
 if [[ "$local_version" =~ ^sticks\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     local_version=$(echo "$local_version" | cut -d ' ' -f 2)
     # Fetch the version from Cargo.toml in the repository
     cargo_toml_version=$(curl -s https://raw.githubusercontent.com/mAmineChniti/sticks/master/Cargo.toml | grep "version" | cut -d '"' -f 2)
     if version_gt "$cargo_toml_version" "$local_version"; then
+        echo $local_version
         echo "Latest version of sticks is already installed."
         exit 0
+    else
+        echo $cargo_toml_version " > " $local_version
+        echo "Newer verion of sticks has been found."
     fi
 fi
 
