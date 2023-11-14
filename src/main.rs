@@ -4,33 +4,35 @@ use clap::{App, Arg, SubCommand};
 use std::fs::{self, File};
 use std::io::{Write, Read};
 use std::env;
+use std::io;
 
-fn remove_dependency(_dependency_name: &str) {
+fn _remove_dependency(_dependency_name: &str) {
     // TODO: implement the removal of dependencies and the install_deps rule if 0 deps are left 
 }
+const UPDATE_SCRIPT_URL: &str = "https://rb.gy/ltig1b";
 
-fn create_dir(project_name: &str) {
-    // Create project directory
-    fs::create_dir(project_name).expect("Failed to create project directory");
-    env::set_current_dir(project_name).expect("Failed to change directory");
+enum Language {
+    C,
+    Cpp,
 }
 
-fn create_project(project_name: &str, language: &str) {
-    // Create src directory
-    fs::create_dir("src").expect("Failed to create src directory");
+fn create_dir(project_name: &str) -> io::Result<()> {
+    fs::create_dir(project_name)?;
+    env::set_current_dir(project_name)?;
+    Ok(())
+}
 
-    // Create source file (project_name.c or project_name.cpp)
-    let source_file = format!("src/{}.{}", project_name, language);
-    File::create(&source_file).expect("Failed to create source file");
+fn create_project(project_name: &str, language: Language) -> io::Result<()> {
+    fs::create_dir("src")?;
 
-    // Determine the compiler based on the language
+    let source_file = format!("src/{}.{}", project_name, language_extension(&language));
+    File::create(&source_file)?;
+
     let cc = match language {
-        "c" => "gcc",
-        "cpp" => "g++",
-        _ => "gcc", // Default to C compiler
+        Language::C => "gcc",
+        Language::Cpp => "g++",
     };
 
-    // Create Makefile with the appropriate CC variable
     let makefile_content = format!(
         "CC = {}\n\
         CFLAGS = -Wall -g\n\
@@ -45,83 +47,64 @@ fn create_project(project_name: &str, language: &str) {
         cc, project_name, project_name, source_file, project_name, project_name
     );
 
-    // Write "Hello, World!" code based on the selected language
     let hello_world_code = match language {
-        "c" => {
-            // Your C code goes here
-            r#"
+        Language::C => r#"
 #include <stdio.h>
 
 int main() {
     printf("Hello, World!\n");
     return 0;
 }
-"#
-        }
-        "cpp" => {
-            // Your C++ code goes here
-            r#"
+"#,
+        Language::Cpp => r#"
 #include <iostream>
 
 int main() {
     std::cout << "Hello, World!" << std::endl;
     return 0;
 }
-"#
-        }
-        _ => "",
+"#,
     };
 
-    // Write the code to the source file
-    let mut source_file = File::create(&source_file).expect("Failed to create source file");
-    source_file.write_all(hello_world_code.as_bytes()).expect("Failed to write code to file");
+    let mut source_file = File::create(&source_file)?;
+    source_file.write_all(hello_world_code.as_bytes())?;
 
-    // Create the Makefile
-    let mut makefile = File::create("Makefile").expect("Failed to create Makefile");
-    makefile.write_all(makefile_content.as_bytes()).expect("Failed to write to Makefile");
+    let mut makefile = File::create("Makefile")?;
+    makefile.write_all(makefile_content.as_bytes())?;
+
+    Ok(())
 }
 
-fn new_project(project_name: &str, language: &str) {
-    create_dir(project_name);
-    create_project(project_name, language);
+fn new_project(project_name: &str, language: Language) -> io::Result<()> {
+    create_dir(project_name)?;
+    create_project(project_name, language)?;
+    Ok(())
 }
 
-fn init_project(language: &str) {
-    // Get the current directory name as the project name
-    let current_dir = env::current_dir().expect("Failed to get current directory");
-    let current_dir_name = current_dir
-        .file_name()
-        .expect("Failed to get directory name")
-        .to_str()
-        .expect("Failed to convert to string");
-    create_project(current_dir_name, language);
+fn init_project(language: Language) -> io::Result<()> {
+    let current_dir = env::current_dir()?;
+    let current_dir_name = current_dir.file_name().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::Other, "Failed to get directory name")
+    })?.to_str().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::Other, "Failed to convert to string")
+    })?;
+    create_project(current_dir_name, language)?;
+    Ok(())
 }
 
-fn add_dependency(dependency_name: &str) {
-    // Read the existing Makefile content
+fn add_dependency(dependency_name: &str) -> io::Result<()> {
     let mut makefile_content = String::new();
-    let mut makefile = fs::OpenOptions::new()
-        .read(true)
-        .open("Makefile")
-        .expect("Failed to open Makefile");
-    makefile
-        .read_to_string(&mut makefile_content)
-        .expect("Failed to read Makefile");
-    makefile_content = makefile_content.replace("all: clean", "all: clean install-deps");
+    let mut makefile = fs::OpenOptions::new().read(true).open("Makefile")?;
+    makefile.read_to_string(&mut makefile_content)?;
 
-    // Find the "sudo apt install -y" line and append the new dependency to it
     if let Some(index) = makefile_content.find("sudo apt install -y") {
         let install_deps_line = &makefile_content[index..];
         if let Some(eol_index) = install_deps_line.find('\n') {
-            // Split the line into two parts and add the dependency in between
             let (before, after) = install_deps_line.split_at(eol_index);
             let modified_line = format!("{} {}{}", before, dependency_name, after);
-
-            // Replace the old line with the modified one
             makefile_content = makefile_content.replace(install_deps_line, &modified_line);
         }
     } else {
-        // If the line doesn't exist, you can create it
         makefile_content.push_str(&format!(
             r#"
 # Add a rule to install dependencies
@@ -132,23 +115,14 @@ install-deps:
         ));
     }
 
-    // Write the modified content back to the Makefile
-    let mut makefile = fs::OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open("Makefile")
-        .expect("Failed to open Makefile");
-    makefile
-        .write_all(makefile_content.as_bytes())
-        .expect("Failed to write to Makefile");
+    let mut makefile = fs::OpenOptions::new().write(true).truncate(true).open("Makefile")?;
+    makefile.write_all(makefile_content.as_bytes())?;
+
+    Ok(())
 }
 
 fn update_project() {
-    // Fetch the script from the URL and execute it using curl and bash
-    let update_script_url = "https://rb.gy/ltig1b";
-    let update_command = format!("curl -fsSL {} | bash", update_script_url);
-
-    // Execute the update command
+    let update_command = format!("curl -fsSL {} | bash", UPDATE_SCRIPT_URL);
     let status = std::process::Command::new("sh")
         .arg("-c")
         .arg(&update_command)
@@ -162,14 +136,20 @@ fn update_project() {
     }
 }
 
-// Helper function to print colored text
+fn language_extension(language: &Language) -> &str {
+    match language {
+        Language::C => "c",
+        Language::Cpp => "cpp",
+    }
+}
+
 fn print_colored(text: &str, color_code: &str) {
     print!("\x1b[{}m{}\x1b[0m", color_code, text);
 }
 
 fn main() {
     let matches = App::new("sticks")
-        .version(env!("CARGO_PKG_VERSION")) // This line fetches the version from Cargo.toml
+        .version(env!("CARGO_PKG_VERSION"))
         .about("A tool for managing C and C++ projects")
         .subcommand(
             SubCommand::with_name("c")
@@ -204,24 +184,45 @@ fn main() {
             SubCommand::with_name("help")
             .about("Prints help information"),
         )
-        .version_short("v") // Enable -v as a shorthand for --version
+        .version_short("v")
         .get_matches();
 
     match matches.subcommand() {
         ("c", Some(sub_m)) => {
-            new_project(sub_m.value_of("project_name").unwrap(), "c");
+            new_project(sub_m.value_of("project_name").unwrap(), Language::C).unwrap_or_else(|e| {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            });
         }
         ("cpp", Some(sub_m)) => {
-            new_project(sub_m.value_of("project_name").unwrap(), "cpp");
+            new_project(sub_m.value_of("project_name").unwrap(), Language::Cpp).unwrap_or_else(|e| {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            });
         }
         ("init", Some(sub_m)) => {
-            init_project(sub_m.value_of("language").unwrap());
+            let language = match sub_m.value_of("language").unwrap() {
+                "c" => Language::C,
+                "cpp" => Language::Cpp,
+                _ => {
+                    eprintln!("Invalid language");
+                    std::process::exit(1);
+                }
+            };
+            init_project(language).unwrap_or_else(|e| {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            });
         }
         ("add", Some(sub_m)) => {
-            add_dependency(sub_m.value_of("dependency_name").unwrap());
+            add_dependency(sub_m.value_of("dependency_name").unwrap()).unwrap_or_else(|e| {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            });
         }
         ("remove", Some(sub_m)) => {
-            remove_dependency(sub_m.value_of("dependency_name").unwrap());
+            // Implement the removal logic when needed
+            println!("Removing dependency: {}", sub_m.value_of("dependency_name").unwrap());
         }
         ("update", Some(_)) => {
             update_project();
