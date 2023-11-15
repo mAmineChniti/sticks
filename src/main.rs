@@ -213,7 +213,6 @@ fn add_dependency(dependency_name: &str) -> io::Result<()> {
         // Add a new install-deps rule
         makefile_content.push_str(&format!(
             r#"
-# Add a rule to install dependencies
 install-deps:
     sudo apt install -y {}
 "#,
