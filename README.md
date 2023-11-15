@@ -125,9 +125,9 @@ sticks update
 
 ## To-Do List
 
-- [ ] Implement the removal of dependencies by using the `sticks remove <dependency_name>` command.
-- [ ] Remove the `install-deps` rule when there are no more dependencies left to install.
-- [ ] Create an `install-deps` command that is based on OS detection, ensuring that dependencies are installed correctly for each specific operating system.
+- [X] Implement the removal of dependencies by using the `sticks remove <dependency_name>` command.
+- [X] Remove the `install-deps` rule when there are no more dependencies left to install.
+- [ ] Add the ability to add multiple dependencies using `sticks add`.
 - [ ] Set up a CI/CD pipeline for the project to automate testing, building, deployment and releases processes.
 
 ## Contributing
