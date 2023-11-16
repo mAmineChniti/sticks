@@ -249,8 +249,11 @@ fn language_extension(language: &Language) -> &str {
     }
 }
 
-fn print_colored(text: &str, color_code: &str) {
+fn print_colored(text: &str, color_code: &str, num_newlines: usize) {
     print!("\x1b[{}m{}\x1b[0m", color_code, text);
+    for _ in 0..num_newlines {
+        println!();
+    }
 }
 
 fn main() {
@@ -339,54 +342,31 @@ fn main() {
         }
         ("help", Some(_)) | ("", None) => {
             // Display colored help message
-            // TODO: Simplify this code
-            print_colored("sticks - A tool for managing C and C++ projects", "1;36");
-            println!();
-            println!();
-            print_colored("Available commands:", "1;34");
-            println!();
-            println!();
-            print_colored("sticks", "1;32");
-            print_colored(" c", "0");
-            print_colored(" <project_name>", "1;36");
-            println!();
-            print_colored("    Create a C project", "0");
-            println!();
-            println!();
-            print_colored("sticks", "1;32");
-            print_colored(" cpp", "0");
-            print_colored(" <project_name>", "1;36");
-            println!();
-            print_colored("    Create a C++ project", "0");
-            println!();
-            println!();
-            print_colored("sticks", "1;32");
-            print_colored(" init", "0");
-            print_colored(" <language>", "1;36");
-            println!();
-            print_colored("    Initialize a project", "0");
-            println!();
-            println!();
-            print_colored("sticks", "1;32");
-            print_colored(" add", "0");
-            print_colored(" <dependency_name>", "1;36");
-            println!();
-            print_colored("    Add a dependency rule to the Makefile", "0");
-            println!();
-            println!();
-            print_colored("sticks", "1;32");
-            print_colored(" remove", "0");
-            print_colored(" <dependency_name>", "1;36");
-            println!();
-            print_colored("    Remove a dependency from the Makefile", "0");
-            println!();
-            println!();
-            print_colored("sticks", "1;32");
-            print_colored(" update", "0");
-            println!();
-            print_colored("    Update sticks to the latest version", "0");
-            println!();
-            println!();
+            print_colored("sticks - A tool for managing C and C++ projects", "1;36",2);
+            print_colored("Available commands:", "1;34",2);
+            print_colored("sticks", "1;32",0);
+            print_colored(" c", "0",0);
+            print_colored(" <project_name>", "1;36",1);
+            print_colored("    Create a C project", "0",2);
+            print_colored("sticks", "1;32",0);
+            print_colored(" cpp", "0",0);
+            print_colored(" <project_name>", "1;36",1);
+            print_colored("    Create a C++ project", "0",2);
+            print_colored("sticks", "1;32",0);
+            print_colored(" init", "0",0);
+            print_colored(" <language>", "1;36",1);
+            print_colored("    Initialize a project", "0",2);
+            print_colored("sticks", "1;32",0);
+            print_colored(" add", "0",0);
+            print_colored(" <dependency_name>", "1;36",1);
+            print_colored("    Add a dependency rule to the Makefile", "0",2);
+            print_colored("sticks", "1;32",0);
+            print_colored(" remove", "0",0);
+            print_colored(" <dependency_name>", "1;36",1);
+            print_colored("    Remove a dependency from the Makefile", "0",2);
+            print_colored("sticks", "1;32",0);
+            print_colored(" update", "0",1);
+            print_colored("    Update sticks to the latest version", "0",2);
         }
         _ => println!("Unknown command"),
     }
