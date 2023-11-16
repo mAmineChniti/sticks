@@ -65,7 +65,7 @@ progress_bar 3
 
 # Check if Rust is installed
 if ! command -v rustc &>/dev/null; then
-    echo "Rust is not installed. Please install Rust before running this script."
+    echo "Rust is not installed. Please install Rust from https://www.rust-lang.org/ before running this script."
     exit 1
 fi
 
