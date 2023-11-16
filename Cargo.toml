@@ -3,9 +3,12 @@ name = "sticks"
 authors = ["TVC"]
 description = "A tool for managing C and C++ projects"
 license = "MIT"
+license-file = "LICENSE"
 version = "0.1.6"
 edition = "2021"
 readme = "README.md"
+repository = "https://github.com/mAmineChniti/sticks"
+documentation = "https://github.com/mAmineChniti/sticks/blob/master/README.md"
 
 [dependencies]
 clap = "2.33"
