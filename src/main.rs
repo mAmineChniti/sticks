@@ -48,7 +48,7 @@ fn add_dependency(dependency_name: &str) -> io::Result<()> {
         ));
     } else {
         // Append the dependency to the existing install-deps rule
-        makefile_content = makefile_content.replace("install-deps:", &format!("install-deps:\n\tsudo apt install -y {}\n", dependency_name));
+        makefile_content = makefile_content.replace("sudo apt install -y", &format!("sudo apt install -y {}", dependency_name));
     }
 
     // Write the updated content back to the Makefile
