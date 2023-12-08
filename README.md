@@ -1,5 +1,7 @@
 # sticks
 
+[![Open Source Helpers](https://www.codetriage.com/maminechniti/sticks/badges/users.svg)](https://www.codetriage.com/maminechniti/sticks)
+
 Sticks is a Rust command-line tool for managing C and C++ projects. It simplifies the process of creating new projects and managing dependencies in your Makefile.
 
 ## Features
@@ -107,6 +109,16 @@ sticks add <dependency_name>
 
 Replace <dependency_name> with the name of the dependency you want to add. Sticks will automatically modify your Makefile to include the new dependency. If the install-deps rule doesn't exist in your Makefile, Sticks will create it for you.
 
+### Adding source files
+
+To enhance the functionality of your project, you can easily add one or multiple source files and their corresponding headers using the following command:
+
+```bash
+sticks src <source_names>
+```
+
+Replace <source_names> with the names of the source files you want to add, separated by spaces. Sticks will intelligently update your project structure, including the necessary modifications to your Makefile.
+
 ### List Subcommands
 
 For additional assistance and to explore available commands, use the help subcommand:
@@ -127,12 +139,13 @@ sticks update
 
 - [X] Implement the removal of dependencies by using the `sticks remove <dependency_name>` command.
 - [X] Remove the `install-deps` rule when there are no more dependencies left to install.
+- [ ] Modularize the code, put the smaller functions into a commonly used mod, keep only the functions that correspond to subcommands in main.
 - [ ] Add the ability to add multiple dependencies using `sticks add`.
 - [ ] Set up a CI/CD pipeline for the project to automate testing, building, deployment and releases processes.
 
 ## Contributing
 
-If you'd like to contribute to Sticks or report issues We welcome contributions and feedback from the community.
+If you'd like to contribute to Sticks or report issues We welcome contributions and feedback from the community, all you have to is open an issue or fork this repo to contribute.
 
 ## License
 
