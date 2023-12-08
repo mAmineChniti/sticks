@@ -147,6 +147,8 @@ sticks update
 
 If you'd like to contribute to Sticks or report issues We welcome contributions and feedback from the community, all you have to is open an issue or fork this repo to contribute.
 
+Fore more details visit [CONTRIBUTING](CONTRIBUTING.md)
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE file](https://github.com/mAmineChniti/sticks/blob/master/LICENSE) for details.
