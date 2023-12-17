@@ -1,4 +1,9 @@
-# sticks
+<p align="center">
+<a href="">
+<img src="sticks.png" alt="sticks Logo" height="150" width="150"/>
+</a>
+</p>
+<h1 align="center">sticks</h1>
 
 [![Open Source Helpers](https://www.codetriage.com/maminechniti/sticks/badges/users.svg)](https://www.codetriage.com/maminechniti/sticks)
 
