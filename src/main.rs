@@ -199,7 +199,16 @@ fn add_sources(source_names: &[&str]) -> io::Result<()> {
 			let header_path = src_path.join(&header_file);
 			fs::write(
 				&header_path,
-				format!("#pragma once\n\n// Header for {}\n", source_name),
+				format!(
+					"
+				#ifndef {}_H
+				#define {}_H
+				#endif /* {}_H */
+				",
+					source_name.to_uppercase(),
+					source_name.to_uppercase(),
+					source_name.to_uppercase()
+				),
 			)?;
 
 			println!("Added source: {}", source_file);
@@ -234,70 +243,88 @@ fn determine_extension(src_path: &Path) -> io::Result<&'static str> {
 	}
 }
 
-fn create_project(project_name: &str, language: Language) -> io::Result<()> {
-	fs::create_dir("src")?;
+fn create_project(project_name: &[&str], language: Language) -> io::Result<()> {
+    fs::create_dir("src")?;
+    let mut project_name: Vec<&str> = project_name.iter().map(|&s| s.trim()).collect();
+    if project_name.len() > 2 {
+        project_name.truncate(2);
+    }
+    let file_name;
+    if project_name.iter().any(|&s| s.contains("main")) {
+        file_name = "main".to_string();
+    } else {
+        file_name = if let Some(&first) = project_name.first() {
+            first.to_string()
+        } else {
+            String::new()
+        };
+    }
+    let project_name: String = project_name
+        .iter()
+        .map(|&s| s.replace("main", ""))
+        .collect();
+    let source_file = format!("src/{}.{}", file_name, language_extension(&language));
+    File::create(&source_file)?;
 
-	let source_file = format!("src/{}.{}", project_name, language_extension(&language));
-	File::create(&source_file)?;
+    let cc = match language {
+        Language::C => "gcc",
+        Language::Cpp => "g++",
+    };
 
-	let cc = match language {
-		Language::C => "gcc",
-		Language::Cpp => "g++",
-	};
+    let makefile_content = format!(
+        "CC = {}\n\
+        CFLAGS = -Wall -Wextra -g\n\
+        \n\
+        all: clean {}\n\
+        \n\
+        {}: src/*.{}\n\
+        \t$(CC) $(CFLAGS) -o {} $^\n\
+        \n\
+        clean:\n\
+        \trm -f {}\n",
+        cc,
+        project_name,
+        project_name,
+        language_extension(&language),
+        project_name,
+        project_name
+    );
 
-	let makefile_content = format!(
-		"CC = {}\n\
-		CFLAGS = -Wall -Wextra -g\n\
-		\n\
-		all: clean {}\n\
-		\n\
-		{}: src/*.{}\n\
-		\t$(CC) $(CFLAGS) -o {} $^\n\
-		\n\
-		clean:\n\
-		\trm -f {}\n",
-		cc,
-		project_name,
-		project_name,
-		language_extension(&language),
-		project_name,
-		project_name
-	);
+    let hello_world_code = match language {
+        Language::C => {
+            r#"
+            #include <stdio.h>
 
-	let hello_world_code = match language {
-		Language::C => {
-			r#"
-		#include <stdio.h>
+            int main() {
+                printf("Hello, World!\n");
+                return 0;
+            }
+            "#
+        }
+        Language::Cpp => {
+            r#"
+            #include <iostream>
 
-		int main() {
-			printf("Hello, World!\n");
-			return 0;
-		}
-		"#
-		}
-		Language::Cpp => {
-			r#"
-		#include <iostream>
+            int main() {
+                std::cout << "Hello, World!" << std::endl;
+                return 0;
+            }
+            "#
+        }
+    };
 
-		int main() {
-			std::cout << "Hello, World!" << std::endl;
-			return 0;
-		}
-		"#
-		}
-	};
+    let mut source_file = File::create(&source_file)?;
+    source_file.write_all(hello_world_code.as_bytes())?;
 
-	let mut source_file = File::create(&source_file)?;
-	source_file.write_all(hello_world_code.as_bytes())?;
+    let mut makefile = File::create("Makefile")?;
+    makefile.write_all(makefile_content.as_bytes())?;
 
-	let mut makefile = File::create("Makefile")?;
-	makefile.write_all(makefile_content.as_bytes())?;
-
-	Ok(())
+    Ok(())
 }
 
-fn new_project(project_name: &str, language: Language) -> io::Result<()> {
-	create_dir(project_name)?;
+
+fn new_project(project_name: &[&str], language: Language) -> io::Result<()> {
+	create_dir(project_name[0])?;
 	create_project(project_name, language)?;
 	Ok(())
 }
@@ -309,7 +336,7 @@ fn init_project(language: Language) -> io::Result<()> {
 		.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get directory name"))?
 		.to_str()
 		.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to convert to string"))?;
-	create_project(current_dir_name, language)?;
+	create_project(&[current_dir_name], language)?;
 	Ok(())
 }
 
@@ -344,7 +371,7 @@ fn print_colored(text: &str, color_code: &str, num_newlines: usize) {
 
 fn main() {
 	let matches = App::new("sticks")
-		.version(env!("CARGO_PKG_VERSION"))
+		//
 		.about("A tool for managing C and C++ projects")
 		.subcommand(
 			SubCommand::with_name("c")
@@ -391,18 +418,19 @@ fn main() {
 
 	match matches.subcommand() {
 		("c", Some(sub_m)) => {
-			new_project(sub_m.value_of("project_name").unwrap(), Language::C).unwrap_or_else(|e| {
+			let main_name = [sub_m.value_of("project_name").unwrap()];
+
+			new_project(&main_name, Language::C).unwrap_or_else(|e| {
 				eprintln!("Error: {}", e);
 				std::process::exit(1);
 			});
 		}
 		("cpp", Some(sub_m)) => {
-			new_project(sub_m.value_of("project_name").unwrap(), Language::Cpp).unwrap_or_else(
-				|e| {
-					eprintln!("Error: {}", e);
-					std::process::exit(1);
-				},
-			);
+			let main_name = [sub_m.value_of("project_name").unwrap()];
+			new_project(&main_name, Language::Cpp).unwrap_or_else(|e| {
+				eprintln!("Error: {}", e);
+				std::process::exit(1);
+			});
 		}
 		("init", Some(sub_m)) => {
 			let language = match sub_m.value_of("language").unwrap() {
