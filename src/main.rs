@@ -11,7 +11,7 @@ const UPDATE_SCRIPT_URL: &str = "https://rb.gy/ltig1b";
 
 enum Language {
 	C,
-	Cpp,
+	Cpp
 }
 
 fn add_dependency(dependency_name: &str) -> io::Result<()> {
