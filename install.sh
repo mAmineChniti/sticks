@@ -26,8 +26,8 @@ function version_gt {
     local ver1=$1
     local ver2=$2
 
-    IFS=. read -ra ver1 <<< "$ver1"
-    IFS=. read -ra ver2 <<< "$ver2"
+    IFS=. read -ra ver1 <<<"$ver1"
+    IFS=. read -ra ver2 <<<"$ver2"
 
     for ((i = 0; i < ${#ver1[@]}; i++)); do
         if [ -z "${ver2[i]}" ]; then
@@ -69,7 +69,6 @@ if ! command -v rustc &>/dev/null; then
     exit 1
 fi
 
-
 # Get the host value from the output of `rustc -vV`
 rustc_output=$(rustc -vV)
 host=$(echo "$rustc_output" | awk -F'\n' '/host:/{print $1}' | cut -d' ' -f 2)
@@ -78,7 +77,10 @@ host=$(echo "$rustc_output" | awk -F'\n' '/host:/{print $1}' | cut -d' ' -f 2)
 if ! dpkg -l | grep -q "build-essential"; then
     # Install build-essential if not already installed (for Debian/Ubuntu)
     echo "Installing build-essential..."
-    sudo apt install build-essential -y > /dev/null 2>&1 || { echo "Error: Unable to install build-essential."; exit 1; }
+    sudo apt install build-essential -y >/dev/null 2>&1 || {
+        echo "Error: Unable to install build-essential."
+        exit 1
+    }
     progress_bar 10
 fi
 
@@ -95,20 +97,29 @@ echo "Cloning the Git repository..."
 progress_bar 5
 
 # Clone the Git repository
-git clone https://github.com/mAmineChniti/sticks > /dev/null 2>&1 || { echo "Error: Unable to clone the Git repository."; exit 1; }
+git clone https://github.com/mAmineChniti/sticks >/dev/null 2>&1 || {
+    echo "Error: Unable to clone the Git repository."
+    exit 1
+}
 
 # Change into the cloned directory
 cd sticks
 
 # Build the project with Cargo in release mode
 echo "Building the project with Cargo..."
-cargo build --release > /dev/null 2>&1 || { echo "Error: Cargo build failed."; exit 1; }
+cargo build --release >/dev/null 2>&1 || {
+    echo "Error: Cargo build failed."
+    exit 1
+}
 progress_bar 10
 
 # Install cargo-deb if not already installed
 if ! command -v cargo-deb &>/dev/null; then
     echo "Installing cargo-deb..."
-    cargo install cargo-deb > /dev/null 2>&1 || { echo "Error: Unable to install cargo-deb."; exit 1; }
+    cargo install cargo-deb >/dev/null 2>&1 || {
+        echo "Error: Unable to install cargo-deb."
+        exit 1
+    }
     progress_bar 10
 fi
 
@@ -122,7 +133,10 @@ fi
 
 # Build a package using cargo-deb for the detected OS
 echo "Building a package for $os_name/$host using cargo-deb..."
-cargo deb --target "$host" > /dev/null 2>&1 || { echo "Error: Cargo deb failed."; exit 1; }
+cargo deb --target "$host" >/dev/null 2>&1 || {
+    echo "Error: Cargo deb failed."
+    exit 1
+}
 progress_bar 10
 
 # Install the generated package using the appropriate package manager
@@ -133,18 +147,18 @@ if [ -f "$deb_dir"/*.deb ] || [ -f "$debian_dir"/*.deb ]; then
     echo "Attempting to install the generated package..."
 
     case $os_name in
-        debian | ubuntu)
-            if [ -f "$deb_dir"/*.deb ]; then
-                sudo apt install "$deb_dir"/*.deb -y > /dev/null 2>&1
-            elif [ -f "$debian_dir"/*.deb ]; then
-                sudo apt install "$debian_dir"/*.deb -y > /dev/null 2>&1
-            else
-                echo "No .deb package found for $os_name."
-            fi
-            ;;
-        *)
-            echo "Unsupported OS: $os_name. Please install the package manually."
-            ;;
+    debian | ubuntu)
+        if [ -f "$deb_dir"/*.deb ]; then
+            sudo apt install "$deb_dir"/*.deb -y >/dev/null 2>&1
+        elif [ -f "$debian_dir"/*.deb ]; then
+            sudo apt install "$debian_dir"/*.deb -y >/dev/null 2>&1
+        else
+            echo "No .deb package found for $os_name."
+        fi
+        ;;
+    *)
+        echo "Unsupported OS: $os_name. Please install the package manually."
+        ;;
     esac
 fi
 
