@@ -348,8 +348,9 @@ fn print_colored(text: &str, color_code: &str, num_newlines: usize) {
 }
 
 fn main() {
+	let version = env!("CARGO_PKG_VERSION");
 	let matches = App::new("sticks")
-		//
+		.version(version)
 		.about("A tool for managing C and C++ projects")
 		.subcommand(
 			SubCommand::with_name("c")
