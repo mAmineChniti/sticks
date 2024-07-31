@@ -116,22 +116,22 @@ fn remove_dependency(dependency_names: &[&str]) -> io::Result<()> {
 			&& !temp_updated_makefile_content.contains("sudo apt install -y")
 		{
 			// Remove the install-deps rule
-			let mut lines = temp_updated_makefile_content.lines();
+			let lines = temp_updated_makefile_content.lines();
 			let mut remove_install_deps_rule = false;
 			// write code to replace all: clean install-deps with all: clean
-			while let Some(line) = lines.next() {
+			for line in lines {
 				if remove_install_deps_rule {
-					if line.trim().is_empty() {
+					if line.is_empty() {
 						remove_install_deps_rule = false;
 					}
-				} else {
-					if line.contains("install-deps:") {
-						remove_install_deps_rule = true;
-					} else {
-						updated_makefile_content.push_str(line);
-						updated_makefile_content.push('\n');
-					}
+					continue;
 				}
+				if line.contains("install-deps:") {
+					remove_install_deps_rule = true;
+					continue;
+				}
+				updated_makefile_content.push_str(line);
+				updated_makefile_content.push('\n');
 			}
 			if updated_makefile_content.contains("all: clean install-deps") {
 				updated_makefile_content =
