@@ -3,8 +3,7 @@ extern crate clap;
 use clap::{App, Arg, SubCommand};
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io;
-use std::io::{Read, Write};
+use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::path::Path;
 
 const UPDATE_SCRIPT_URL: &str = "https://rb.gy/ltig1b";
@@ -14,10 +13,10 @@ enum Language {
 	Cpp,
 }
 
-fn add_dependency(dependency_name: &str) -> io::Result<()> {
+fn add_dependency(dependency_name: &str) -> Result<()> {
 	if !Path::new("Makefile").exists() {
-		return Err(io::Error::new(
-			io::ErrorKind::NotFound,
+		return Err(Error::new(
+			ErrorKind::NotFound,
 			"Makefile not found in the current directory. Cannot add a dependency.",
 		));
 	}
@@ -72,10 +71,10 @@ fn has_install_deps_rule(makefile_content: &str) -> bool {
 	makefile_content.contains("install-deps:")
 }
 
-fn remove_dependency(dependency_names: &[&str]) -> io::Result<()> {
+fn remove_dependency(dependency_names: &[&str]) -> Result<()> {
 	if !Path::new("Makefile").exists() {
-		return Err(io::Error::new(
-			io::ErrorKind::NotFound,
+		return Err(Error::new(
+			ErrorKind::NotFound,
 			"Makefile not found in the current directory. Cannot remove a dependency.",
 		));
 	}
@@ -149,12 +148,12 @@ fn remove_dependency(dependency_names: &[&str]) -> io::Result<()> {
 	Ok(())
 }
 
-fn create_dir(project_name: &str) -> io::Result<()> {
+fn create_dir(project_name: &str) -> Result<()> {
 	let path = env::current_dir()?.join(project_name);
 
 	if path.exists() {
-		return Err(io::Error::new(
-			io::ErrorKind::AlreadyExists,
+		return Err(Error::new(
+			ErrorKind::AlreadyExists,
 			format!("Directory '{}' already exists", project_name),
 		));
 	}
@@ -166,7 +165,7 @@ fn create_dir(project_name: &str) -> io::Result<()> {
 	Ok(())
 }
 
-fn add_sources(source_names: &[&str]) -> io::Result<()> {
+fn add_sources(source_names: &[&str]) -> Result<()> {
 	if !Path::new("src").exists() {
 		print_colored(
 			"src directory not found. Cannot add sources and headers.",
@@ -175,7 +174,7 @@ fn add_sources(source_names: &[&str]) -> io::Result<()> {
 		);
 		print_colored("Maybe try creating a new project or initializing a new project in the current directory","31",1);
 
-		return Err(io::Error::new(io::ErrorKind::NotFound, ""));
+		return Err(Error::new(ErrorKind::NotFound, ""));
 	}
 
 	let src_path = Path::new("src");
@@ -214,7 +213,7 @@ fn add_sources(source_names: &[&str]) -> io::Result<()> {
 	Ok(())
 }
 
-fn determine_extension(src_path: &Path) -> io::Result<&'static str> {
+fn determine_extension(src_path: &Path) -> Result<&'static str> {
 	// Find the first source file in src/ to determine the extension
 	let source_file = fs::read_dir(src_path)?
 		.filter_map(|entry| {
@@ -239,7 +238,7 @@ fn determine_extension(src_path: &Path) -> io::Result<&'static str> {
 	}
 }
 
-fn create_project(project_name: &str, language: Language) -> io::Result<()> {
+fn create_project(project_name: &str, language: Language) -> Result<()> {
 	println!("Creating project {}...", project_name);
 	fs::create_dir("src")?;
 	let source_file = format!("src/main.{}", language_extension(&language));
@@ -301,19 +300,19 @@ fn create_project(project_name: &str, language: Language) -> io::Result<()> {
 	Ok(())
 }
 
-fn new_project(project_name: &str, language: Language) -> io::Result<()> {
+fn new_project(project_name: &str, language: Language) -> Result<()> {
 	create_dir(project_name)?;
 	create_project(project_name, language)?;
 	Ok(())
 }
 
-fn init_project(language: Language) -> io::Result<()> {
+fn init_project(language: Language) -> Result<()> {
 	let current_dir = env::current_dir()?;
 	let current_dir_name = current_dir
 		.file_name()
-		.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get directory name"))?
+		.ok_or_else(|| Error::new(ErrorKind::Other, "Failed to get directory name"))?
 		.to_str()
-		.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to convert to string"))?;
+		.ok_or_else(|| Error::new(ErrorKind::Other, "Failed to convert to string"))?;
 	create_project(current_dir_name, language)?;
 	Ok(())
 }
@@ -471,7 +470,7 @@ fn main() {
 			print_colored("sticks", "1;32", 0);
 			print_colored(" init", "0", 0);
 			print_colored(" <language>", "1;36", 1);
-			print_colored("	Initialize a project", "0", 2);
+			print_colored(" Initialize a project", "0", 2);
 			print_colored("sticks", "1;32", 0);
 			print_colored(" add", "0", 0);
 			print_colored(" <dependency_name>", "1;36", 1);
