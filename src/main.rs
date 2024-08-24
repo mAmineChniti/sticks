@@ -459,7 +459,7 @@ fn main() {
 			print_colored("sticks", "1;32", 0);
 			print_colored(" init", "0", 0);
 			print_colored(" <language>", "1;36", 1);
-			print_colored(" Initialize a project", "0", 2);
+			print_colored("	Initialize a project", "0", 2);
 			print_colored("sticks", "1;32", 0);
 			print_colored(" add", "0", 0);
 			print_colored(" <dependency_name>", "1;36", 1);
