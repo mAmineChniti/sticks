@@ -1,5 +1,3 @@
-extern crate clap;
-
 use clap::{App, Arg, SubCommand};
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -269,28 +267,19 @@ fn create_project(project_name: &str, language: Language) -> Result<()> {
 	);
 
 	let hello_world_code = match language {
-		Language::C => {
-			r#"
-            #include <stdio.h>
-
-            int main() {
-                printf("Hello, World!\n");
-                return 0;
-            }
-            "#
-		}
-		Language::Cpp => {
-			r#"
-            #include <iostream>
-
-            int main() {
-                std::cout << "Hello, World!" << std::endl;
-                return 0;
-            }
-            "#
-		}
+		Language::C => "#include <stdio.h>\n\n\
+                        int main() {\n\
+                        \tprintf(\"Hello, World!\\n\");\n\
+                        \treturn 0;\n\
+                        }\n"
+		.to_string(),
+		Language::Cpp => "#include <iostream>\n\n\
+                          int main() {\n\
+                          \tstd::cout << \"Hello, World!\" << std::endl;\n\
+                          \treturn 0;\n\
+                          }\n"
+		.to_string(),
 	};
-
 	let mut source_file = File::create(&source_file)?;
 	source_file.write_all(hello_world_code.as_bytes())?;
 
@@ -470,7 +459,7 @@ fn main() {
 			print_colored("sticks", "1;32", 0);
 			print_colored(" init", "0", 0);
 			print_colored(" <language>", "1;36", 1);
-			print_colored(" Initialize a project", "0", 2);
+			print_colored("	Initialize a project", "0", 2);
 			print_colored("sticks", "1;32", 0);
 			print_colored(" add", "0", 0);
 			print_colored(" <dependency_name>", "1;36", 1);
