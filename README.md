@@ -145,7 +145,7 @@ sticks update
 - [X] Implement the removal of dependencies by using the `sticks remove <dependency_name>` command.
 - [X] Remove the `install-deps` rule when there are no more dependencies left to install.
 - [ ] Modularize the code, put the smaller functions into a commonly used mod, keep only the functions that correspond to subcommands in main.
-- [ ] Add the ability to add multiple dependencies using `sticks add`.
+- [X] Add the ability to add multiple dependencies using `sticks add`.
 - [ ] Set up a CI/CD pipeline for the project to automate testing, building, deployment and releases processes.
 
 ## Contributing
