@@ -12,13 +12,33 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.event.workflow_run.conclusion == 'success' }}
 
     steps:
     - name: Check out the code
       uses: actions/checkout@v4
 
+    - name: Get current version
+      id: get_version
+      run: echo "version=$(cargo pkgid | sed 's/.*#//')" >> $GITHUB_ENV
+
+    - name: Get published version
+      id: get_published_version
+      run: |
+        published_version=$(cargo search $(cargo pkgid | sed 's/.*#//' | cut -d: -f1) --limit 1 | grep -oP '\(\K[^)]+' | head -1)
+        echo "published_version=$published_version" >> $GITHUB_ENV
+
+    - name: Compare versions
+      id: compare_versions
+      run: |
+        if [ "$(echo -e "${published_version}\n${version}" | sort -V | head -n1)" != "$version" ]; then
+          echo "newer_version=true" >> $GITHUB_ENV
+        else
+          echo "newer_version=false" >> $GITHUB_ENV
+
     - name: Publish to crates.io
+      if: ${{ env.newer_version == 'true' }}
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       run: cargo publish --no-verify
+
