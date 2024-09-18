@@ -165,14 +165,9 @@ fn create_dir(project_name: &str) -> Result<()> {
 
 fn add_sources(source_names: &[&str]) -> Result<()> {
 	if !Path::new("src").exists() {
-		print_colored(
-			"src directory not found. Cannot add sources and headers.",
-			"31",
-			1,
-		);
-		print_colored("Maybe try creating a new project or initializing a new project in the current directory","31",1);
-
-		return Err(Error::new(ErrorKind::NotFound, ""));
+		eprintln!("src directory not found. Cannot add sources and headers.");
+		eprintln!("Maybe try creating a new project or initializing a new project in the current directory");
+		return Err(Error::new(ErrorKind::NotFound, "'src' directory not found"));
 	}
 
 	let src_path = Path::new("src");
@@ -328,13 +323,6 @@ fn language_extension(language: &Language) -> &str {
 	}
 }
 
-fn print_colored(text: &str, color_code: &str, num_newlines: usize) {
-	print!("\x1b[{}m{}\x1b[0m", color_code, text);
-	for _ in 0..num_newlines {
-		println!();
-	}
-}
-
 fn main() {
 	let version = env!("CARGO_PKG_VERSION");
 	let matches = App::new("sticks")
@@ -352,7 +340,7 @@ fn main() {
 		)
 		.subcommand(
 			SubCommand::with_name("init")
-				.about("Initialize a project")
+				.about("Initialize a project in the current directory")
 				.arg(
 					Arg::with_name("language")
 						.required(true)
@@ -361,12 +349,12 @@ fn main() {
 		)
 		.subcommand(
 			SubCommand::with_name("add")
-				.about("Add a dependency rule to the Makefile")
+				.about("Add dependencies to the Makefile")
 				.arg(Arg::with_name("dependency_name").required(true)),
 		)
 		.subcommand(
 			SubCommand::with_name("remove")
-				.about("Remove a dependency from the Makefile")
+				.about("Remove dependencies from the Makefile")
 				.arg(
 					Arg::with_name("dependency_name")
 						.required(true)
@@ -375,7 +363,7 @@ fn main() {
 		)
 		.subcommand(
 			SubCommand::with_name("src")
-				.about("Add more source files to your project")
+				.about("Add more source files and their headers to your project")
 				.arg(Arg::with_name("source_names").required(true).multiple(true)),
 		)
 		.subcommand(SubCommand::with_name("update").about("Update sticks to the latest version"))
@@ -443,38 +431,6 @@ fn main() {
 		}
 		("update", Some(_)) => {
 			update_project();
-		}
-		("help", Some(_)) | ("", None) => {
-			// Display colored help message
-			print_colored("sticks - A tool for managing C and C++ projects", "1;36", 2);
-			print_colored("Available commands:", "1;34", 2);
-			print_colored("sticks", "1;32", 0);
-			print_colored(" c", "0", 0);
-			print_colored(" <project_name>", "1;36", 1);
-			print_colored("	Create a C project", "0", 2);
-			print_colored("sticks", "1;32", 0);
-			print_colored(" cpp", "0", 0);
-			print_colored(" <project_name>", "1;36", 1);
-			print_colored("	Create a C++ project", "0", 2);
-			print_colored("sticks", "1;32", 0);
-			print_colored(" init", "0", 0);
-			print_colored(" <language>", "1;36", 1);
-			print_colored("	Initialize a project", "0", 2);
-			print_colored("sticks", "1;32", 0);
-			print_colored(" add", "0", 0);
-			print_colored(" <dependency_name>", "1;36", 1);
-			print_colored("	Add a dependency rule to the Makefile", "0", 2);
-			print_colored("sticks", "1;32", 0);
-			print_colored(" remove", "0", 0);
-			print_colored(" <dependency_name>", "1;36", 1);
-			print_colored("	Remove a dependency from the Makefile", "0", 2);
-			print_colored("sticks", "1;32", 0);
-			print_colored(" src", "0", 0);
-			print_colored(" <source_names>", "1;36", 1);
-			print_colored("	Add source files and their headers", "0", 2);
-			print_colored("sticks", "1;32", 0);
-			print_colored(" update", "0", 1);
-			print_colored("	Update sticks to the latest version", "0", 2);
 		}
 		_ => println!("Unknown command"),
 	}
