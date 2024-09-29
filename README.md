@@ -1,11 +1,9 @@
 <p align="center">
-<a href="">
+<a href="https://crates.io/crates/sticks" rel="noopener noreferrer">
 <img src="sticks.png" alt="sticks Logo" height="150" width="150"/>
 </a>
 </p>
 <h1 align="center">sticks</h1>
-
-[![Open Source Helpers](https://www.codetriage.com/maminechniti/sticks/badges/users.svg)](https://www.codetriage.com/maminechniti/sticks)
 
 Sticks is a Rust command-line tool for managing C and C++ projects. It simplifies the process of creating new projects and managing dependencies in your Makefile.
 
