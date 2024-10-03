@@ -5,7 +5,7 @@ pub mod languages;
 pub mod sources;
 pub mod updater;
 
-pub use dependencies::{add_dependency, remove_dependency};
+pub use dependencies::{add_dependencies, remove_dependencies};
 pub use file_handler::create_dir;
 pub use languages::{Language, LanguageConsts};
 pub use sources::add_sources;

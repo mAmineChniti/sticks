@@ -2,7 +2,7 @@
 use clap::{App, Arg, SubCommand};
 use std::env;
 use sticks::{
-	add_dependency, add_sources, init_project, new_project, remove_dependency, update_project,
+	add_dependencies, add_sources, init_project, new_project, remove_dependencies, update_project,
 	Language,
 };
 
@@ -33,7 +33,11 @@ fn main() {
 		.subcommand(
 			SubCommand::with_name("add")
 				.about("Add dependencies to the Makefile")
-				.arg(Arg::with_name("dependency_name").required(true)),
+				.arg(
+					Arg::with_name("dependency_name")
+						.required(true)
+						.multiple(true),
+				),
 		)
 		.subcommand(
 			SubCommand::with_name("remove")
@@ -86,17 +90,23 @@ fn main() {
 			}
 		}
 		("add", Some(sub_m)) => {
-			if let Err(e) = add_dependency(sub_m.value_of("dependency_name").unwrap()) {
+			let dependencies: Vec<String> = sub_m
+				.values_of("dependency_name")
+				.unwrap()
+				.map(|s| s.to_string())
+				.collect();
+			if let Err(e) = add_dependencies(&dependencies) {
 				eprintln!("Error: {}", e);
 				std::process::exit(1);
 			}
 		}
 		("remove", Some(sub_m)) => {
-			let dependencies: Vec<&str> = sub_m
+			let dependencies: Vec<String> = sub_m
 				.values_of("dependency_name")
-				.unwrap_or_default()
+				.unwrap()
+				.map(|s| s.to_string())
 				.collect();
-			if let Err(e) = remove_dependency(&dependencies) {
+			if let Err(e) = remove_dependencies(&dependencies) {
 				eprintln!("Error: {}", e);
 				std::process::exit(1);
 			}
