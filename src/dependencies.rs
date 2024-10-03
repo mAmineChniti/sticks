@@ -3,51 +3,65 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::path::Path;
 
-/// Adds a dependency to the Makefile.
-pub fn add_dependency(dependency_name: &str) -> Result<()> {
+pub fn add_dependencies(dependency_names: &Vec<String>) -> Result<()> {
 	if !Path::new("Makefile").exists() {
 		return Err(Error::new(
 			ErrorKind::NotFound,
-			"Makefile not found in the current directory. Cannot add a dependency.",
+			"Makefile not found in the current directory. Cannot add dependencies.",
 		));
 	}
 
-	// Read Makefile content
 	let mut makefile_content = String::new();
 	let mut makefile = File::open("Makefile")?;
 	makefile.read_to_string(&mut makefile_content)?;
 
-	// Check if "all: clean install-deps" is present
 	if !makefile_content.contains("all: clean install-deps") {
-		// Replace "all: clean" with "all: clean install-deps"
 		makefile_content = makefile_content.replace("all: clean", "all: clean install-deps");
 	}
 
-	// Check if the dependency is already present in the install-deps rule
-	if makefile_content.contains(&format!("sudo apt install -y {}", dependency_name)) {
-		println!(
-			"Dependency '{}' is already present in the install-deps rule.",
-			dependency_name
-		);
+	let install_deps_prefix = "sudo apt install -y";
+
+	let install_deps_line =
+		if let Some(install_deps_pos) = makefile_content.find(install_deps_prefix) {
+			let existing_deps_start = install_deps_pos + install_deps_prefix.len();
+			let existing_deps = &makefile_content[existing_deps_start..]
+				.lines()
+				.next()
+				.unwrap_or("")
+				.trim();
+
+			existing_deps.to_string()
+		} else {
+			String::new()
+		};
+
+	let mut current_deps: Vec<String> = install_deps_line
+		.split_whitespace()
+		.map(|s| s.to_string())
+		.collect();
+
+	let mut added_deps = Vec::new();
+
+	for dep in dependency_names {
+		if !current_deps.contains(dep) {
+			current_deps.push(dep.clone());
+			added_deps.push(dep);
+		}
+	}
+
+	if added_deps.is_empty() {
+		println!("All dependencies are already present.");
 		return Ok(());
 	}
 
-	// Check if "install-deps:" is present
-	if !makefile_content.contains("install-deps:") {
-		// Add a new install-deps rule
-		makefile_content.push_str(&format!(
-			"\ninstall-deps:\n\tsudo apt install -y {}\n",
-			dependency_name
-		));
+	let new_install_deps_line = format!("{} {}", install_deps_prefix, current_deps.join(" "));
+
+	if makefile_content.contains(install_deps_prefix) {
+		makefile_content = makefile_content.replace(install_deps_prefix, &new_install_deps_line);
 	} else {
-		// Append the dependency to the existing install-deps rule
-		makefile_content = makefile_content.replace(
-			"sudo apt install -y",
-			&format!("sudo apt install -y {}", dependency_name),
-		);
+		makefile_content.push_str(&format!("\ninstall-deps:\n\t{}\n", new_install_deps_line));
 	}
 
-	// Write the updated content back to the Makefile
 	let mut makefile = OpenOptions::new()
 		.write(true)
 		.truncate(true)
@@ -55,11 +69,12 @@ pub fn add_dependency(dependency_name: &str) -> Result<()> {
 		.open("Makefile")?;
 	makefile.write_all(makefile_content.as_bytes())?;
 
+	println!("Added dependencies: {:?}", added_deps);
+
 	Ok(())
 }
 
-/// Removes dependencies from the Makefile.
-pub fn remove_dependency(dependency_names: &[&str]) -> Result<()> {
+pub fn remove_dependencies(dependency_names: &Vec<String>) -> Result<()> {
 	if !Path::new("Makefile").exists() {
 		return Err(Error::new(
 			ErrorKind::NotFound,
@@ -70,7 +85,6 @@ pub fn remove_dependency(dependency_names: &[&str]) -> Result<()> {
 	let makefile_path = "Makefile";
 	let mut makefile_content = String::new();
 
-	// Read the existing Makefile content
 	{
 		let mut makefile = fs::File::open(makefile_path)?;
 		makefile.read_to_string(&mut makefile_content)?;
@@ -78,28 +92,45 @@ pub fn remove_dependency(dependency_names: &[&str]) -> Result<()> {
 
 	let mut updated_makefile_content = String::new();
 	let mut found_dependencies = false;
+	let install_deps_prefix = "\nsudo apt install -y";
+	let mut remaining_deps: Vec<String> = Vec::new();
 
-	// Remove the lines containing the dependencies
 	for line in makefile_content.lines() {
-		if !dependency_names.iter().any(|dep| line.contains(dep)) {
+		if line.trim().starts_with(install_deps_prefix) {
+			let existing_deps: Vec<String> = line[install_deps_prefix.len()..]
+				.split_whitespace()
+				.map(|s| s.to_string())
+				.collect();
+
+			remaining_deps = existing_deps
+				.into_iter()
+				.filter(|dep| !dependency_names.contains(dep))
+				.collect();
+
+			if remaining_deps.is_empty() {
+				found_dependencies = true;
+				continue; // Skip writing this line back (since no deps remain)
+			} else {
+				let new_install_deps_line =
+					format!("{} {}", install_deps_prefix, remaining_deps.join(" "));
+				updated_makefile_content.push_str(&new_install_deps_line);
+				updated_makefile_content.push('\n');
+				found_dependencies = true;
+				continue;
+			}
+		} else {
 			updated_makefile_content.push_str(line);
 			updated_makefile_content.push('\n');
-		} else {
-			found_dependencies = true;
 		}
 	}
 
 	if found_dependencies {
-		// Write the updated content back to the Makefile
 		let mut makefile = fs::File::create(makefile_path)?;
 		makefile.write_all(updated_makefile_content.as_bytes())?;
 		println!("Dependencies {:?} removed from Makefile.", dependency_names);
 
-		// Check if the install-deps rule is present and there are no more dependencies
-		if has_install_deps_rule(&updated_makefile_content)
-			&& !updated_makefile_content.contains("sudo apt install -y")
-		{
-			// Remove the install-deps rule
+		// If no dependencies are left after removal, remove install-deps rule and adjust the 'all' rule
+		if remaining_deps.is_empty() {
 			let mut final_makefile_content = String::new();
 			let mut skip_lines = false;
 			for line in updated_makefile_content.lines() {
@@ -110,7 +141,7 @@ pub fn remove_dependency(dependency_names: &[&str]) -> Result<()> {
 					continue;
 				}
 				if line.contains("install-deps:") {
-					skip_lines = true;
+					skip_lines = true; // Skip the entire install-deps rule
 					continue;
 				}
 				final_makefile_content.push_str(line);
@@ -120,18 +151,13 @@ pub fn remove_dependency(dependency_names: &[&str]) -> Result<()> {
 				final_makefile_content =
 					final_makefile_content.replace("all: clean install-deps", "all: clean");
 			}
-			// Write the updated content back to the Makefile
 			let mut makefile = fs::File::create(makefile_path)?;
 			makefile.write_all(final_makefile_content.as_bytes())?;
-			println!("Removed install-deps rule from Makefile.");
+			println!("Removed install-deps rule and cleaned up Makefile.");
 		}
 	} else {
 		println!("Dependencies {:?} not found in Makefile.", dependency_names);
 	}
 
 	Ok(())
-}
-
-fn has_install_deps_rule(makefile_content: &str) -> bool {
-	makefile_content.contains("install-deps:")
 }
