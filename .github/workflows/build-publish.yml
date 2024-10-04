@@ -47,10 +47,10 @@ jobs:
 
         if [ -z "$published_version" ]; then
           echo "Published version could not be found. Please ensure the package is published." >&2
-          exit 1
+          echo "published_version=none" >> $GITHUB_ENV # Set to none if not found
+        else
+          echo "published_version=$published_version" >> $GITHUB_ENV
         fi
-
-        echo "published_version=$published_version" >> $GITHUB_ENV
 
     - name: Debug version variables
       run: |
@@ -59,10 +59,14 @@ jobs:
 
     - name: Compare versions
       run: |
-        if [ "$(printf "%s\n%s" "${{ env.published_version }}" "${{ env.version }}" | sort -V | head -n1)" != "${{ env.version }}" ]; then
-          echo "newer_version=true" >> $GITHUB_ENV
-        else
+        if [ "${{ env.published_version }}" == "none" ]; then
           echo "newer_version=false" >> $GITHUB_ENV
+        else
+          if [ "$(printf "%s\n%s" "${{ env.published_version }}" "${{ env.version }}" | sort -V | head -n1)" != "${{ env.version }}" ]; then
+            echo "newer_version=true" >> $GITHUB_ENV
+          else
+            echo "newer_version=false" >> $GITHUB_ENV
+          fi
         fi
 
     - name: Publish to crates.io
