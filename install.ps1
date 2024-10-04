@@ -108,8 +108,8 @@ if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
 
 # Get the host value from rustc output
 $rustcOutput = rustc -vV
-$hostLine = $rustcOutput | Where-Object { $_ -like "host:*" }
-$host = ($hostLine -split ' ')[1]
+$rustHostLine = $rustcOutput | Where-Object { $_ -like "host:*" }
+$rustHost = ($rustHostLine -split ' ')[1]
 
 # Create a temporary directory
 $tempDir = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("sticks_install_" + (Get-Random))
