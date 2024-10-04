@@ -1,4 +1,4 @@
-;# Exit immediately if a command exits with a non-zero status
+# Exit immediately if a command exits with a non-zero status
 $ErrorActionPreference = "Stop"
 
 # Function to display a progress bar
@@ -9,8 +9,7 @@ function Show-ProgressBar {
     $steps = 100
     $increment = $Duration / $steps
     for ($i = 0; $i -le $steps; $i++) {
-        Write-Host -NoNewline "`r[$i/$steps] "
-        Write-Host -NoNewline ('=' * $i) + (' ' * ($steps - $i)) + ']'
+        Write-Host -NoNewline "`rProgress: [$i/$steps] " + ('=' * $i) + (' ' * ($steps - $i)) + "]"
         Start-Sleep -Milliseconds $increment
     }
     Write-Host "`n"
@@ -28,6 +27,7 @@ function Compare-Version {
 
     for ($i = 0; $i -lt $ver1Parts.Length; $i++) {
         if ($ver2Parts.Length -le $i) {
+            # If ver2 has fewer components, consider it smaller
             return $true
         }
         if ([int]$ver1Parts[$i] -gt [int]$ver2Parts[$i]) {
@@ -40,20 +40,60 @@ function Compare-Version {
     return $false
 }
 
-# Fetch the current version installed from the command output
-$localVersionOutput = (sticks -v 2>&1)
-if ($localVersionOutput -match "^sticks\s\d+\.\d+\.\d+$") {
-    $localVersion = $matches[0].Split(' ')[1]
-    # Fetch the version from Cargo.toml in the repository
-    $cargoTomlVersion = (Invoke-RestMethod -Uri "https://raw.githubusercontent.com/mAmineChniti/sticks/master/Cargo.toml" | Select-String "version" | ForEach-Object { $_.Line }).Split('"')[1]
-    
-    if (-not (Compare-Version $cargoTomlVersion $localVersion)) {
-        Write-Host "Latest version of sticks is already installed."
+# Function to fetch the latest version from Cargo.toml
+function Get-LatestVersion {
+    try {
+        $cargoTomlContent = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/mAmineChniti/sticks/master/Cargo.toml"
+        $versionLine = $cargoTomlContent | Select-String 'version\s*=\s*".+"'
+        if ($versionLine) {
+            return ($versionLine -split '"' )[1]
+        }
+        else {
+            throw "Version not found in Cargo.toml."
+        }
+    }
+    catch {
+        Write-Error "Failed to fetch latest version from Cargo.toml: $_"
+        exit 1
+    }
+}
+
+# Function to get the installed version of sticks
+function Get-InstalledVersion {
+    try {
+        $localVersionOutput = sticks -v
+        if ($localVersionOutput -match "^sticks\s(\d+\.\d+\.\d+)$") {
+            return $matches[1]
+        }
+        else {
+            Write-Warning "Unable to parse sticks version. Assuming it's not installed."
+            return $null
+        }
+    }
+    catch {
+        return $null
+    }
+}
+
+# Main Script Execution Starts Here
+
+# Get the installed version of sticks
+$installedVersion = Get-InstalledVersion
+
+# Fetch the latest version from the repository
+$latestVersion = Get-LatestVersion
+
+if ($installedVersion) {
+    if (-not (Compare-Version $latestVersion $installedVersion)) {
+        Write-Host "You already have the latest version of sticks ($installedVersion) installed."
         exit 0
     }
     else {
-        Write-Host "Newer version of sticks has been found."
+        Write-Host "A newer version of sticks ($latestVersion) is available. Installed version: $installedVersion."
     }
+}
+else {
+    Write-Host "sticks is not installed. Proceeding with installation."
 }
 
 # Display progress bar for Rust installation check
@@ -68,35 +108,31 @@ if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
 
 # Get the host value from rustc output
 $rustcOutput = rustc -vV
-$host = ($rustcOutput -split "`n" | Where-Object { $_ -like "*host:*" }).Split(' ')[1]
+$hostLine = $rustcOutput | Where-Object { $_ -like "host:*" }
+$host = ($hostLine -split ' ')[1]
 
-# Display progress bar for creating a temporary directory
-Write-Host "Creating a temporary directory..."
-Show-ProgressBar -Duration 3000
-
-$tempDir = New-TemporaryFile
+# Create a temporary directory
+$tempDir = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("sticks_install_" + (Get-Random))
+New-Item -ItemType Directory -Path $tempDir | Out-Null
 Set-Location $tempDir
 
 # Clone the Git repository
 Write-Host "Cloning the Git repository..."
 Show-ProgressBar -Duration 5000
-git clone https://github.com/mAmineChniti/sticks | Out-Null
-Set-Location sticks
+git clone https://github.com/mAmineChniti/sticks . | Out-Null
 
 # Build the project with Cargo
 Write-Host "Building the project with Cargo..."
-cargo build --release | Out-Null
 Show-ProgressBar -Duration 10000
+cargo build --release | Out-Null
 
-# Install cargo-deb if not already installed
-if (-not (Get-Command cargo-deb -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing cargo-deb..."
-    cargo install cargo-deb | Out-Null
-    Show-ProgressBar -Duration 10000
-}
+# Install the project using Cargo
+Write-Host "Installing sticks using Cargo..."
+Show-ProgressBar -Duration 5000
+cargo install --path . --force | Out-Null
 
 # Clean up by removing the temporary directory
 Set-Location $env:USERPROFILE
 Remove-Item -Recurse -Force $tempDir
 
-Write-Host "$(sticks -v) is now installed."
+Write-Host "sticks version $latestVersion has been installed successfully."
