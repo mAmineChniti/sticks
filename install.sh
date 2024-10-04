@@ -44,7 +44,7 @@ function version_gt {
 }
 
 # Get the version from the output of sticks -v
-local_version=$(sticks version 2>/dev/null || true)
+local_version=$(sticks --version 2>/dev/null || true)
 if [[ "$local_version" =~ ^sticks\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     local_version=$(echo "$local_version" | cut -d ' ' -f 2)
     # Fetch the version from Cargo.toml in the repository
@@ -167,4 +167,4 @@ cd
 rm -rf "$temp_dir"
 
 # Optionally, you can print a message to confirm the installation
-echo "$(sticks version) is now installed."
+echo "$(sticks --version) is now installed."
