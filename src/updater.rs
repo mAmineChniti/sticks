@@ -9,10 +9,7 @@ pub fn update_project() -> Result<()> {
 
 	let update_command = match os {
 		"linux" | "macos" => format!("curl -fsSL {} | bash", UPDATE_SCRIPT_URL_LINUX),
-		"windows" => format!(
-			"powershell -Command \"& {{ iwr -useb {} | iex }}\"",
-			UPDATE_SCRIPT_URL_WINDOWS
-		),
+		"windows" => format!("& {{ iwr -useb {} | iex }}", UPDATE_SCRIPT_URL_WINDOWS),
 		_ => {
 			eprintln!("Unsupported operating system: {}", os);
 			return Ok(());
@@ -20,9 +17,9 @@ pub fn update_project() -> Result<()> {
 	};
 
 	let status = if os == "windows" {
-		std::process::Command::new("cmd")
-			.arg("/C")
-			.arg(&update_command)
+		std::process::Command::new("powershell")
+			.arg("-Command")
+			.arg(update_command)
 			.status()?
 	} else {
 		std::process::Command::new("sh")
@@ -37,3 +34,4 @@ pub fn update_project() -> Result<()> {
 
 	Ok(())
 }
+
