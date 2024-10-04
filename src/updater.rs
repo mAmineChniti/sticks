@@ -21,7 +21,8 @@ pub fn update_project() -> Result<()> {
 
 	let status = if os == "windows" {
 		std::process::Command::new("cmd")
-			.args(["/C", &update_command])
+			.arg("/C")
+			.arg(&update_command)
 			.status()?
 	} else {
 		std::process::Command::new("sh")
@@ -36,4 +37,3 @@ pub fn update_project() -> Result<()> {
 
 	Ok(())
 }
-

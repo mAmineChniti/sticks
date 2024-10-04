@@ -60,7 +60,7 @@ function Get-LatestVersion {
 # Function to get the installed version of sticks
 function Get-InstalledVersion {
     try {
-        $localVersionOutput = sticks -v
+        $localVersionOutput = sticks version
         if ($localVersionOutput -match "^sticks\s(\d+\.\d+\.\d+)$") {
             return $matches[1]
         }
