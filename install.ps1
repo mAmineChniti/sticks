@@ -27,7 +27,6 @@ function Compare-Version {
 
     for ($i = 0; $i -lt $ver1Parts.Length; $i++) {
         if ($ver2Parts.Length -le $i) {
-            # If ver2 has fewer components, consider it smaller
             return $true
         }
         if ([int]$ver1Parts[$i] -gt [int]$ver2Parts[$i]) {
