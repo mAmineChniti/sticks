@@ -30,11 +30,10 @@ pub fn update_project() -> Result<()> {
 			.status()?
 	};
 
-	if status.success() {
-		println!("Update successful!");
-	} else {
+	if !status.success() {
 		eprintln!("Update failed with exit code: {}", status);
 	}
 
 	Ok(())
 }
+
