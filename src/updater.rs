@@ -9,7 +9,10 @@ pub fn update_project() -> Result<()> {
 
 	let update_command = match os {
 		"linux" | "macos" => format!("curl -fsSL {} | bash", UPDATE_SCRIPT_URL_LINUX),
-		"windows" => format!("& {{ iwr -useb {} | iex }}", UPDATE_SCRIPT_URL_WINDOWS),
+		"windows" => format!(
+			"iex ((New-Object System.Net.WebClient).DownloadString('{}'))",
+			UPDATE_SCRIPT_URL_WINDOWS
+		),
 		_ => {
 			eprintln!("Unsupported operating system: {}", os);
 			return Ok(());
@@ -34,4 +37,3 @@ pub fn update_project() -> Result<()> {
 
 	Ok(())
 }
-
