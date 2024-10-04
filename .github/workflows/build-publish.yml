@@ -45,7 +45,18 @@ jobs:
     - name: Get published version
       id: get_published_version
       run: |
-        published_version=$(cargo search $(cargo pkgid | sed 's/.*#//' | cut -d: -f1) --limit 1 | grep -oP '\(\K[^)]+' | head -1)
+        # Extract the package name
+        package_name=$(cargo pkgid | sed 's/.*#//; s/:.*//')
+        
+        # Get the published version by extracting the version number
+        published_version=$(cargo search "$package_name" --limit 1 | grep -oP '=\s*"\K[^"]+')
+
+        # Check if published_version is valid
+        if [ -z "$published_version" ]; then
+          echo "Published version could not be found. Please ensure the package is published." >&2
+          exit 1
+        fi
+        
         echo "published_version=$published_version" >> $GITHUB_ENV
 
     - name: Debug version variables
@@ -55,7 +66,7 @@ jobs:
 
     - name: Compare versions
       run: |
-        if [ "$(printf "%s\n%s" "$published_version" "$version" | sort -V | head -n1)" != "$version" ]; then
+        if [ "$(printf "%s\n%s" "${{ env.published_version }}" "${{ env.version }}" | sort -V | head -n1)" != "${{ env.version }}" ]; then
           echo "newer_version=true" >> $GITHUB_ENV
         else
           echo "newer_version=false" >> $GITHUB_ENV
