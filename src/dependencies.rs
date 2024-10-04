@@ -29,7 +29,6 @@ pub fn add_dependencies(dependency_names: &Vec<String>) -> Result<()> {
 				.next()
 				.unwrap_or("")
 				.trim();
-
 			existing_deps.to_string()
 		} else {
 			String::new()
@@ -75,89 +74,93 @@ pub fn add_dependencies(dependency_names: &Vec<String>) -> Result<()> {
 }
 
 pub fn remove_dependencies(dependency_names: &Vec<String>) -> Result<()> {
-	if !Path::new("Makefile").exists() {
+	const MAKEFILE: &str = "Makefile";
+	const INSTALL_DEPS_PREFIX: &str = "sudo apt install -y";
+
+	if !Path::new(MAKEFILE).exists() {
 		return Err(Error::new(
 			ErrorKind::NotFound,
-			"Makefile not found in the current directory. Cannot remove a dependency.",
+			"Makefile not found in the current directory. Cannot remove dependencies.",
 		));
 	}
 
-	let makefile_path = "Makefile";
-	let mut makefile_content = String::new();
+	let makefile_content = fs::read_to_string(MAKEFILE)?;
+	let lines: Vec<&str> = makefile_content.lines().collect();
+	let mut updated_lines: Vec<String> = Vec::new();
+	let mut i = 0;
+	let mut install_deps_found = false;
+	let mut dependencies_removed = false;
 
-	{
-		let mut makefile = fs::File::open(makefile_path)?;
-		makefile.read_to_string(&mut makefile_content)?;
-	}
+	while i < lines.len() {
+		let line = lines[i];
 
-	let mut updated_makefile_content = String::new();
-	let mut found_dependencies = false;
-	let install_deps_prefix = "\nsudo apt install -y";
-	let mut remaining_deps: Vec<String> = Vec::new();
-
-	for line in makefile_content.lines() {
-		if line.trim().starts_with(install_deps_prefix) {
-			let existing_deps: Vec<String> = line[install_deps_prefix.len()..]
-				.split_whitespace()
-				.map(|s| s.to_string())
-				.collect();
-
-			remaining_deps = existing_deps
-				.into_iter()
-				.filter(|dep| !dependency_names.contains(dep))
-				.collect();
-
-			if remaining_deps.is_empty() {
-				found_dependencies = true;
-				continue; // Skip writing this line back (since no deps remain)
+		if line.starts_with("all:") {
+			let parts: Vec<&str> = line.split(':').collect();
+			if parts.len() >= 2 {
+				let targets: Vec<&str> = parts[1]
+					.split_whitespace()
+					.filter(|t| *t != "install-deps")
+					.collect();
+				if !targets.is_empty() {
+					updated_lines.push(format!("all: {}", targets.join(" ")));
+				} else {
+					updated_lines.push("all: clean".to_string());
+				}
 			} else {
-				let new_install_deps_line =
-					format!("{} {}", install_deps_prefix, remaining_deps.join(" "));
-				updated_makefile_content.push_str(&new_install_deps_line);
-				updated_makefile_content.push('\n');
-				found_dependencies = true;
-				continue;
+				updated_lines.push(line.to_string());
+			}
+		} else if line.starts_with("install-deps:") {
+			install_deps_found = true;
+			if i + 1 < lines.len() {
+				let cmd_line = lines[i + 1];
+				if cmd_line.trim_start().starts_with(INSTALL_DEPS_PREFIX) {
+					let deps_str = cmd_line.trim_start()[INSTALL_DEPS_PREFIX.len()..].trim();
+					let mut current_deps: Vec<String> =
+						deps_str.split_whitespace().map(String::from).collect();
+					let original_len = current_deps.len();
+					current_deps.retain(|dep| !dependency_names.contains(dep));
+					let removed = original_len - current_deps.len();
+
+					if removed > 0 {
+						dependencies_removed = true;
+						if !current_deps.is_empty() {
+							updated_lines.push("install-deps:".to_string());
+							updated_lines.push(format!(
+								"\t{} {}",
+								INSTALL_DEPS_PREFIX,
+								current_deps.join(" ")
+							));
+						} else {
+							println!(
+								"All specified dependencies removed. Removing install-deps rule."
+							);
+						}
+					} else {
+						updated_lines.push(line.to_string());
+						if i + 1 < lines.len() {
+							updated_lines.push(lines[i + 1].to_string());
+						}
+					}
+				} else {
+					updated_lines.push(line.to_string());
+				}
+				i += 1; // Skip the command line
+			} else {
+				updated_lines.push(line.to_string());
 			}
 		} else {
-			updated_makefile_content.push_str(line);
-			updated_makefile_content.push('\n');
+			updated_lines.push(line.to_string());
 		}
+
+		i += 1;
 	}
 
-	if found_dependencies {
-		let mut makefile = fs::File::create(makefile_path)?;
-		makefile.write_all(updated_makefile_content.as_bytes())?;
+	if dependencies_removed && install_deps_found {
 		println!("Dependencies {:?} removed from Makefile.", dependency_names);
-
-		// If no dependencies are left after removal, remove install-deps rule and adjust the 'all' rule
-		if remaining_deps.is_empty() {
-			let mut final_makefile_content = String::new();
-			let mut skip_lines = false;
-			for line in updated_makefile_content.lines() {
-				if skip_lines {
-					if line.trim().is_empty() {
-						skip_lines = false;
-					}
-					continue;
-				}
-				if line.contains("install-deps:") {
-					skip_lines = true; // Skip the entire install-deps rule
-					continue;
-				}
-				final_makefile_content.push_str(line);
-				final_makefile_content.push('\n');
-			}
-			if final_makefile_content.contains("all: clean install-deps") {
-				final_makefile_content =
-					final_makefile_content.replace("all: clean install-deps", "all: clean");
-			}
-			let mut makefile = fs::File::create(makefile_path)?;
-			makefile.write_all(final_makefile_content.as_bytes())?;
-			println!("Removed install-deps rule and cleaned up Makefile.");
-		}
 	} else {
 		println!("Dependencies {:?} not found in Makefile.", dependency_names);
 	}
 
+	fs::write(MAKEFILE, updated_lines.join("\n"))?;
 	Ok(())
 }
