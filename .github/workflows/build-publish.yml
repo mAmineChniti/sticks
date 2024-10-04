@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - '**'
-  pull_request:
-    branches:
-      - master
-    types:
-      - closed
 
 env:
   CARGO_TERM_COLOR: always
@@ -47,16 +42,14 @@ jobs:
       run: |
         # Extract the package name
         package_name=$(cargo pkgid | sed 's/.*#//; s/:.*//')
-        
-        # Get the published version by extracting the version number
+
         published_version=$(cargo search "$package_name" --limit 1 | grep -oP '=\s*"\K[^"]+')
 
-        # Check if published_version is valid
         if [ -z "$published_version" ]; then
           echo "Published version could not be found. Please ensure the package is published." >&2
           exit 1
         fi
-        
+
         echo "published_version=$published_version" >> $GITHUB_ENV
 
     - name: Debug version variables
