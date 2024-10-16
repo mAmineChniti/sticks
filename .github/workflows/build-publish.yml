@@ -18,51 +18,80 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Build
-      run: cargo build --release --verbose
+      - name: Set up Rust toolchain
+        uses: actions/setup-rust@v1
+        with:
+          rust-version: stable
 
-    - name: Install cargo-deb
-      run: cargo install cargo-deb
+      - name: Build the project
+        run: cargo build --release --verbose
 
-    - name: Build deb
-      run: cargo deb
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build .deb package
+        run: cargo deb
 
   publish:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/master' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged) }}
+    if: >
+      github.ref == 'refs/heads/master' ||
+      (github.event_name == 'pull_request' &&
+       github.event.action == 'closed' &&
+       github.event.pull_request.merged == true)
 
     steps:
-    - name: Check out the code
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Get current version
-      id: get_version
-      run: echo "version=$(cargo pkgid | sed 's/.*#//')" >> $GITHUB_ENV
+      - name: Set up Rust toolchain
+        uses: actions/setup-rust@v1
+        with:
+          rust-version: stable
 
-    - name: Get published version
-      id: get_published_version
-      run: |
-        published_version=$(cargo search $(cargo pkgid | sed 's/.*#//' | cut -d: -f1) --limit 1 | grep -oP '\(\K[^)]+' | head -1)
-        echo "published_version=$published_version" >> $GITHUB_ENV
+      - name: Get current version
+        id: get_version
+        run: |
+          version=$(cargo pkgid | sed 's/.*#//')
+          echo "version=$version" >> $GITHUB_ENV
 
-    - name: Debug version variables
-      run: |
-        echo "Current version: ${{ env.version }}"
-        echo "Published version: ${{ env.published_version }}"
+      - name: Get package name
+        id: get_package_name
+        run: |
+          package_name=$(cargo pkgid | sed 's/.*#//' | cut -d: -f1)
+          echo "package_name=$package_name" >> $GITHUB_ENV
 
-    - name: Compare versions
-      run: |
-        if [ "$(printf "%s\n%s" "$published_version" "$version" | sort -V | head -n1)" != "$version" ]; then
-          echo "newer_version=true" >> $GITHUB_ENV
-        else
-          echo "newer_version=false" >> $GITHUB_ENV
-        fi
+      - name: Get published version from crates.io
+        id: get_published_version
+        run: |
+          package_name="${{ env.package_name }}"
+          published_version=$(cargo search "$package_name" --limit 1 | grep -oP '"\K[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+          echo "published_version=$published_version" >> $GITHUB_ENV
 
-    - name: Publish to crates.io
-      if: ${{ env.newer_version == 'true' }}
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      run: cargo publish --no-verify
+      - name: Debug version variables
+        run: |
+          echo "Current version: ${{ env.version }}"
+          echo "Published version: ${{ env.published_version }}"
+
+      - name: Compare versions
+        run: |
+          if [ -z "${{ env.published_version }}" ]; then
+            echo "newer_version=true" >> $GITHUB_ENV
+          elif [ "$(printf '%s\n%s' "${{ env.published_version }}" "${{ env.version }}" | sort -V | head -n1)" != "${{ env.version }}" ]; then
+            echo "newer_version=true" >> $GITHUB_ENV
+          else
+            echo "newer_version=false" >> $GITHUB_ENV
+          fi
+
+      - name: Debug newer_version flag
+        run: echo "Is there a newer version? ${{ env.newer_version }}"
+
+      - name: Publish to crates.io
+        if: ${{ env.newer_version == 'true' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --no-verify
