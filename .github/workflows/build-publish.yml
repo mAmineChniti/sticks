@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - '**'
+  pull_request:
+    branches:
+      - master
+    types:
+      - closed
 
 env:
   CARGO_TERM_COLOR: always
@@ -40,17 +45,8 @@ jobs:
     - name: Get published version
       id: get_published_version
       run: |
-        # Extract the package name
-        package_name=$(cargo pkgid | sed 's/.*#//; s/:.*//')
-
-        published_version=$(cargo search "$package_name" --limit 1 | grep -oP '=\s*"\K[^"]+')
-
-        if [ -z "$published_version" ]; then
-          echo "Published version could not be found. Please ensure the package is published." >&2
-          echo "published_version=none" >> $GITHUB_ENV # Set to none if not found
-        else
-          echo "published_version=$published_version" >> $GITHUB_ENV
-        fi
+        published_version=$(cargo search $(cargo pkgid | sed 's/.*#//' | cut -d: -f1) --limit 1 | grep -oP '\(\K[^)]+' | head -1)
+        echo "published_version=$published_version" >> $GITHUB_ENV
 
     - name: Debug version variables
       run: |
@@ -59,14 +55,10 @@ jobs:
 
     - name: Compare versions
       run: |
-        if [ "${{ env.published_version }}" == "none" ]; then
-          echo "newer_version=false" >> $GITHUB_ENV
+        if [ "$(printf "%s\n%s" "$published_version" "$version" | sort -V | head -n1)" != "$version" ]; then
+          echo "newer_version=true" >> $GITHUB_ENV
         else
-          if [ "$(printf "%s\n%s" "${{ env.published_version }}" "${{ env.version }}" | sort -V | head -n1)" != "${{ env.version }}" ]; then
-            echo "newer_version=true" >> $GITHUB_ENV
-          else
-            echo "newer_version=false" >> $GITHUB_ENV
-          fi
+          echo "newer_version=false" >> $GITHUB_ENV
         fi
 
     - name: Publish to crates.io
