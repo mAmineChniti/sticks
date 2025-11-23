@@ -1,16 +1,20 @@
 [package]
 name = "sticks"
-authors = ["TVC"]
+authors = ["mAmineChniti"]
 description = "A tool for managing C and C++ projects"
 license = "MIT"
-version = "0.1.15"
+version = "0.2.0"
 edition = "2021"
 readme = "README.md"
 repository = "https://github.com/mAmineChniti/sticks"
 documentation = "https://github.com/mAmineChniti/sticks/blob/master/README.md"
 
 [dependencies]
-clap = "2.33"
+anyhow = "1.0.100"
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+serial_test = "3.2"
 
 [[bin]]
 name="sticks"
@@ -18,8 +22,18 @@ path="src/main.rs"
 
 [package.metadata.deb]
 name = "sticks"
-maintainer = "TVC"
-copyright = "TVC"
-depends = "$auto"
-section = "utility"
+maintainer = "mAmineChniti <emin.chniti@esprit.tn>"
+copyright = "2023-2025 mAmineChniti/TVC <emin.chniti@esprit.tn>"
+license-file = ["LICENSE", "0"]
+depends = "$auto, gcc"
+extended-description = """\
+Sticks is a Rust command-line tool for managing C and C++ projects. 
+It simplifies the process of creating new projects and managing dependencies 
+in your Makefile with modern build practices."""
+section = "devel"
 priority = "optional"
+assets = [
+    ["target/release/sticks", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/sticks/", "644"],
+    ["LICENSE", "usr/share/doc/sticks/", "644"],
+]

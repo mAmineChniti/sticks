@@ -7,29 +7,71 @@ pub trait LanguageConsts {
 
 	fn generate_makefile_content(&self, project_name: &str) -> String {
 		format!(
-			"CC = {}\n\
-             CFLAGS = -Wall -Wextra -g\n\
+			"# Compiler and flags\n\
+             CC = {}\n\
+             CFLAGS = -Wall -Wextra -Werror -O2 -g\n\
+             LDFLAGS =\n\
              \n\
-             all: clean {}\n\
+             # Directories\n\
+             SRC_DIR = src\n\
+             BUILD_DIR = build\n\
              \n\
-             {}: src/*.{}\n\
-             \t$(CC) $(CFLAGS) -o {} $^\n\
+             # Source files\n\
+             SRCS = $(wildcard $(SRC_DIR)/*.{})\n\
+             OBJS = $(SRCS:$(SRC_DIR)/%.{}=$(BUILD_DIR)/%.o)\n\
              \n\
+             # Target executable\n\
+             TARGET = {}\n\
+             \n\
+             # Default target\n\
+             all: $(TARGET)\n\
+             \n\
+             # Build target\n\
+             $(TARGET): $(OBJS)\n\
+             \t@mkdir -p $(BUILD_DIR)\n\
+             \t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)\n\
+             \t@echo \"Build complete: $(TARGET)\"\n\
+             \n\
+             # Compile source files\n\
+             $(BUILD_DIR)/%.o: $(SRC_DIR)/%.{}\n\
+             \t@mkdir -p $(BUILD_DIR)\n\
+             \t$(CC) $(CFLAGS) -c $< -o $@\n\
+             \n\
+             # Clean build artifacts\n\
              clean:\n\
-             \trm -f {}\n",
+             \t@rm -rf $(BUILD_DIR) $(TARGET)\n\
+             \t@echo \"Cleaned build artifacts\"\n\
+             \n\
+             # Run the program\n\
+             run: $(TARGET)\n\
+             \t./$(TARGET)\n\
+             \n\
+             # Rebuild\n\
+             rebuild: clean all\n\
+             \n\
+             .PHONY: all clean run rebuild\n",
 			self.cc(),
-			project_name,
-			project_name,
+			self.extension(),
 			self.extension(),
 			project_name,
-			project_name
+			self.extension()
 		)
 	}
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum Language {
 	C,
 	Cpp,
+}
+
+impl std::fmt::Display for Language {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Language::C => write!(f, "C"),
+			Language::Cpp => write!(f, "C++"),
+		}
+	}
 }
 
 impl LanguageConsts for Language {
@@ -68,13 +110,13 @@ impl LanguageConsts for Language {
 }
 
 impl FromStr for Language {
-	type Err = String;
+	type Err = anyhow::Error;
 
-	fn from_str(input: &str) -> Result<Language, Self::Err> {
+		fn from_str(input: &str) -> Result<Language, Self::Err> {
 		match input.to_lowercase().as_str() {
 			"c" => Ok(Language::C),
 			"cpp" => Ok(Language::Cpp),
-			_ => Err(format!("Unsupported language: {}", input)),
+			_ => anyhow::bail!("Unsupported language: {}. Use 'c' or 'cpp'", input),
 		}
 	}
 }

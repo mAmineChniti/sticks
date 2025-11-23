@@ -5,155 +5,299 @@
 </p>
 <h1 align="center">sticks</h1>
 
-Sticks is a Rust command-line tool for managing C and C++ projects. It simplifies the process of creating new projects and managing dependencies in your Makefile.
+<p align="center">
+  <em>A modern, lightweight CLI tool for managing C and C++ projects</em>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#updating">Updating</a> •
+  <a href="#contributing">Contributing</a>
+</p>
+
+---
 
 ## Features
 
-- Create new C and C++ projects with a single command.
-- Generate a basic project structure with source files and a Makefile.
-- Automatically set up "Hello, World!" code in the chosen language.
-- Easily add and remove dependencies in your Makefile.
+- 🚀 **Quick Project Setup** - Create new C/C++ projects with a single command
+- 📁 **Smart Structure** - Auto-generates organized project structure with source files and Makefile
+- 📦 **Dependency Management** - Easily add/remove dependencies in your Makefile
+- 🔧 **Multi-Source Support** - Add multiple source files with automatic Makefile integration
+- 🔄 **Self-Updating** - Built-in update mechanism that downloads from GitHub releases
+- 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
+- ✅ **Quality Assured** - Comprehensive test suite with 18 automated tests
+- 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
 
-**Before proceeding with the quick install, please make sure you have Rust installed. If you don't have Rust installed, you can download and install it from the official [Rust website](https://www.rust-lang.org/tools/install).**
+## Installation
 
-## Quick Install
+Choose the installation method that works best for you:
+
+### 📦 Package Managers (Recommended)
+
+<details>
+<summary><b>Arch Linux (AUR)</b></summary>
 
 ```bash
-curl -fsSL https://rebrand.ly/tyzot1g | bash
+# Using an AUR helper (recommended)
+yay -S sticks
+# or
+paru -S sticks
+
+# Or manually
+git clone https://aur.archlinux.org/sticks.git
+cd sticks
+makepkg -si
 ```
 
-**OR**
+See [sticks-aur](https://github.com/mAmineChniti/sticks-aur) for AUR packaging details.
+
+</details>
+
+<details>
+<summary><b>Debian/Ubuntu</b></summary>
+
+```bash
+# Download the latest .deb package
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.0-1_amd64.deb
+sudo dpkg -i sticks_*.deb
+```
+
+</details>
+
+### 🚀 Pre-built Binaries
+
+```bash
+# x86_64
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-linux-x86_64
+chmod +x sticks-linux-x86_64
+sudo mv sticks-linux-x86_64 /usr/local/bin/sticks
+
+# aarch64
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-linux-aarch64
+chmod +x sticks-linux-aarch64
+sudo mv sticks-linux-aarch64 /usr/local/bin/sticks
+```
+
+### 🦀 From Cargo
 
 ```bash
 cargo install sticks
 ```
 
-## Quick Uninstall
+Requires Rust toolchain from [rustup.rs](https://rustup.rs/).
+
+### 🔨 Build from Source
 
 ```bash
-sudo apt remove sticks -y
+# Clone the repository
+git clone --recurse-submodules https://github.com/mAmineChniti/sticks.git
+cd sticks
+
+# Build release binary
+cargo build --release
+
+# Install (choose one)
+sudo cp target/release/sticks /usr/local/bin/  # System-wide
+# or
+cp target/release/sticks ~/.local/bin/         # User only
 ```
 
-**OR**
+## Quick Start
 
 ```bash
-cargo uninstall sticks
+# Create a new C++ project
+sticks cpp my-project
+cd my-project
+
+# Add a dependency
+sticks add libcurl
+
+# Add more source files
+sticks src utils network
+
+# Build and run
+make
+./my-project
 ```
-
-## Build from Source
-
-To use `sticks`, you'll need to build the project:
-
-1. Clone the repository:
-
-    ```bash
-    git clone https://github.com/mAmineChniti/sticks.git
-   ```
-
-2. Change the current directory to the project folder:
-
-    ```bash
-    cd sticks
-    ```
-
-3. Build the project using cargo:
-
-    ```bash
-    cargo build --release
-    ```
-
-4. Once the build is complete, you can find the binary in the target/release directory. You can add this directory to your system's PATH for convenient usage.
 
 ## Usage
 
-### Creating a New Project
+### Creating Projects
 
-To create a new C project, use the following command:
-
-```bash
-sticks c <project_name>
-```
-
-To create a new C++ project, use the following command:
+**Create a new project in a subdirectory:**
 
 ```bash
-sticks cpp <project_name>
+sticks c my-c-project       # New C project
+sticks cpp my-cpp-project   # New C++ project
 ```
 
-Replace <project_name> with the name of your project.
+This creates a directory with:
+- `src/` directory with a "Hello, World!" program
+- `build/` directory for build artifacts
+- `Makefile` with sensible defaults (debug/release builds, clean target)
 
-These commands will create a new project directory with the specified name, set up a source file, and create a basic Makefile. The source file will contain a "Hello, World!" program in C++ or C.
-
-### Initializing a Project in the Current Directory
-
-If you want to initialize a new project directly in the current directory, use these commands:
-
-To initialize a new C project in the current directory, use:
+**Initialize in current directory:**
 
 ```bash
-sticks init c
+sticks init c     # Initialize C project here
+sticks init cpp   # Initialize C++ project here
 ```
 
-To initialize a new C++ project in the current directory, use:
+### Managing Dependencies
+
+**Add dependencies:**
 
 ```bash
-sticks init cpp
+sticks add libcurl              # Single dependency
+sticks add openssl libpq zlib   # Multiple dependencies
 ```
 
-These commands will create a new project based on the current directory name, set up a source file, and create a basic Makefile. The source file will contain a "Hello, World!" program in C++ or C, depending on the chosen project type.
+Automatically updates your Makefile's `install-deps` target.
 
-### Adding a Dependency
-
-To add a dependency to your project's Makefile, use the following command:
+**Remove dependencies:**
 
 ```bash
-sticks add <dependency_name>
+sticks remove libcurl           # Remove single dependency
+sticks remove openssl libpq     # Remove multiple dependencies
 ```
 
-Replace <dependency_name> with the name of the dependency you want to add. Sticks will automatically modify your Makefile to include the new dependency. If the install-deps rule doesn't exist in your Makefile, Sticks will create it for you.
+Cleans up the `install-deps` rule automatically when empty.
 
-### Adding source files
-
-To enhance the functionality of your project, you can easily add one or multiple source files and their corresponding headers using the following command:
+### Adding Source Files
 
 ```bash
-sticks src <source_names>
+sticks src utils               # Adds src/utils.cpp (or .c) and include/utils.h
+sticks src network database    # Add multiple source files
 ```
 
-Replace <source_names> with the names of the source files you want to add, separated by spaces. Sticks will intelligently update your project structure, including the necessary modifications to your Makefile.
+Sticks will:
+- Create source files in `src/`
+- Create corresponding headers in `include/`
+- Update Makefile to compile and link new sources
 
-### List Subcommands
-
-For additional assistance and to explore available commands, use the help subcommand:
+### Getting Help
 
 ```bash
-sticks help
+sticks --help           # Show all commands
+sticks <command> --help # Help for specific command
+sticks --version        # Show version
 ```
 
-### Updating Sticks
+## Updating
 
-To ensure you have the latest features and bug fixes, it's essential to keep your Sticks installation up to date:
+Sticks can update itself without requiring Rust/Cargo:
 
 ```bash
 sticks update
 ```
 
-## To-Do List
+This downloads the latest binary from GitHub releases and replaces your installation.
 
-- [X] Implement the removal of dependencies by using the `sticks remove <dependency_name>` command.
-- [X] Remove the `install-deps` rule when there are no more dependencies left to install.
-- [X] Modularize the code, put the smaller functions into a commonly used mod, keep only the functions that correspond to subcommands in main.
-- [X] Add the ability to add multiple dependencies using `sticks add`.
-- [X] Set up a CI/CD pipeline for the project to automate testing, building, deployment and releases processes.
+**Alternative update methods:**
+
+```bash
+# Arch Linux (package manager)
+sudo pacman -Syu sticks
+# or with AUR helper
+yay -Syu
+
+# Debian/Ubuntu (download new .deb)
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.0-1_amd64.deb
+sudo dpkg -i sticks_*.deb
+
+# Cargo installation
+cargo install sticks --force
+```
+
+## Uninstallation
+
+```bash
+# Cargo installation
+cargo uninstall sticks
+
+# Arch Linux
+yay -R sticks
+
+# Debian/Ubuntu
+sudo apt remove sticks
+
+# Manual installation
+sudo rm /usr/local/bin/sticks
+# or
+rm ~/.local/bin/sticks
+```
+
+## Project Structure
+
+A typical sticks-managed project looks like:
+
+```
+my-project/
+├── src/
+│   ├── main.cpp        # Entry point
+│   ├── utils.cpp       # Additional sources
+│   └── network.cpp
+├── include/
+│   ├── utils.h         # Headers
+│   └── network.h
+├── build/              # Build artifacts (gitignored)
+│   ├── debug/
+│   └── release/
+└── Makefile            # Auto-generated, customizable
+```
+
+## Technical Details
+
+- **Language:** Rust 2021 edition
+- **Dependencies:** clap 4, anyhow (build-time only)
+- **Dev Dependencies:** serial_test (for isolated test execution)
+- **Runtime Requirements:** GCC (for compiling your C/C++ projects)
+- **Supported Architectures:** x86_64, aarch64
+- **Supported Platforms:** Linux (Arch, Debian, Ubuntu, others)
+- **Test Coverage:** 18 comprehensive tests covering all core functionality
+- **CI/CD:** Automated testing, building, and releases via GitHub Actions
 
 ## Contributing
 
-If you'd like to contribute to Sticks or report issues We welcome contributions and feedback from the community, all you have to is open an issue or fork this repo to contribute.
+We welcome contributions! Here's how to get involved:
 
-Fore more details visit [CONTRIBUTING](CONTRIBUTING.md)
+1. **Report Issues:** Found a bug? [Open an issue](https://github.com/mAmineChniti/sticks/issues)
+2. **Submit PRs:** Fork the repo and submit pull requests
+3. **Improve Docs:** Help us make documentation better
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+## Roadmap
+
+- [X] Implement dependency removal with `sticks remove`
+- [X] Auto-cleanup of empty `install-deps` rule
+- [X] Modularized codebase
+- [X] Batch dependency operations
+- [X] CI/CD pipeline with automated releases
+- [X] Self-update mechanism without Cargo dependency
+- [X] Multi-architecture support (x86_64, aarch64)
+- [X] Comprehensive test suite with automated testing
+- [X] Quality gates in CI/CD (tests run before releases)
+- [ ] Integration tests for end-to-end workflows
+- [ ] Template system for custom project structures
+- [ ] CMake support alongside Makefile
+- [ ] Plugin system for extending functionality
+- [ ] Code coverage reporting
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE file](https://github.com/mAmineChniti/sticks/blob/master/LICENSE) for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-For any inquiries, feel free to email us at [emin.chniti@esprit.tn](mailto:emin.chniti@esprit.tn).
+## Contact
+
+**Maintainer:** mAmineChniti  
+**Email:** [emin.chniti@esprit.tn](mailto:emin.chniti@esprit.tn)  
+**Repository:** [github.com/mAmineChniti/sticks](https://github.com/mAmineChniti/sticks)  
+**AUR Package:** [github.com/mAmineChniti/sticks-aur](https://github.com/mAmineChniti/sticks-aur)
+
+---
+
+<p align="center">Made with ❤️ for the C/C++ community</p>

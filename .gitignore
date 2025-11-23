@@ -1,3 +1,25 @@
 .DS_Store
 
+# Build artifacts
 /target
+
+# Packaging artifacts
+*.deb
+*.pkg.tar.zst
+*.tar.gz
+packaging/*.pkg.tar.zst
+packaging/*.tar.gz
+packaging/pkg/
+packaging/src/
+
+# Test artifacts (in case tests fail to clean up)
+/Makefile
+/src/main.c
+/src/main.cpp
+/build/
+test_*
+my_project/
+existing_project/
+
+# Cargo lock for libraries (uncomment if needed)
+# Cargo.lock
