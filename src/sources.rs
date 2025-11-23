@@ -1,33 +1,29 @@
-// sources.rs
+use anyhow::{Context, Result};
 use std::fs;
-use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 
-/// Adds source files and their headers to the project.
 pub fn add_sources(source_names: &[&str]) -> Result<()> {
 	if !Path::new("src").exists() {
-		eprintln!("src directory not found. Cannot add sources and headers.");
-		eprintln!("Maybe try creating a new project or initializing a new project in the current directory");
-		return Err(Error::new(ErrorKind::NotFound, "'src' directory not found"));
+		anyhow::bail!(
+			"src directory not found. Cannot add sources and headers.\n\
+			Maybe try creating a new project or initializing a new project in the current directory"
+		);
 	}
 
 	let src_path = Path::new("src");
 
-	// Determine the extension based on existing files in src/
 	let extension = determine_extension(src_path)?;
 
 	for &source_name in source_names {
 		let source_file = format!("{}.{}", source_name, extension);
 		let source_path = src_path.join(&source_file);
 
-		// Check if the source file already exists
 		if source_path.exists() {
 			println!("Source file {} already exists. Skipping.", source_file);
 		} else {
-			// Create the source file
-			fs::write(&source_path, format!("// Code for {}\n", source_name))?;
+			fs::write(&source_path, "")
+				.with_context(|| format!("Failed to create source file {}", source_file))?;
 
-			// Create corresponding .h file
 			let header_file = format!("{}.h", source_name);
 			let header_path = src_path.join(&header_file);
 			fs::write(
@@ -38,7 +34,8 @@ pub fn add_sources(source_names: &[&str]) -> Result<()> {
 					source_name.to_uppercase(),
 					source_name.to_uppercase()
 				),
-			)?;
+			)
+			.with_context(|| format!("Failed to create header file {}", header_file))?;
 
 			println!("Added source: {}", source_file);
 		}
@@ -47,9 +44,7 @@ pub fn add_sources(source_names: &[&str]) -> Result<()> {
 	Ok(())
 }
 
-/// Determines the file extension based on existing source files in `src/`.
 fn determine_extension(src_path: &Path) -> Result<&'static str> {
-	// Find the first source file in src/ to determine the extension
 	let source_file = fs::read_dir(src_path)?
 		.filter_map(|entry| {
 			let entry = entry.ok()?;
@@ -68,7 +63,7 @@ fn determine_extension(src_path: &Path) -> Result<&'static str> {
 		Some("cpp") => Ok("cpp"),
 		_ => {
 			eprintln!("No existing source files found in src/. Defaulting to .c extension.");
-			Ok("c") // Default to .c if no existing source files are found
+			Ok("c")
 		}
 	}
 }

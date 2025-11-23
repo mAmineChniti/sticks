@@ -1,19 +1,13 @@
-// dependencies.rs
-use std::fs::{self, File, OpenOptions};
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use anyhow::{Context, Result};
+use std::fs;
 use std::path::Path;
 
-pub fn add_dependencies(dependency_names: &Vec<String>) -> Result<()> {
+pub fn add_dependencies(dependency_names: &[String]) -> Result<()> {
 	if !Path::new("Makefile").exists() {
-		return Err(Error::new(
-			ErrorKind::NotFound,
-			"Makefile not found in the current directory. Cannot add dependencies.",
-		));
+		anyhow::bail!("Makefile not found in the current directory. Cannot add dependencies.");
 	}
 
-	let mut makefile_content = String::new();
-	let mut makefile = File::open("Makefile")?;
-	makefile.read_to_string(&mut makefile_content)?;
+	let mut makefile_content = fs::read_to_string("Makefile").context("Failed to read Makefile")?;
 
 	if !makefile_content.contains("all: clean install-deps") {
 		makefile_content = makefile_content.replace("all: clean", "all: clean install-deps");
@@ -61,27 +55,19 @@ pub fn add_dependencies(dependency_names: &Vec<String>) -> Result<()> {
 		makefile_content.push_str(&format!("\ninstall-deps:\n\t{}\n", new_install_deps_line));
 	}
 
-	let mut makefile = OpenOptions::new()
-		.write(true)
-		.truncate(true)
-		.create(true)
-		.open("Makefile")?;
-	makefile.write_all(makefile_content.as_bytes())?;
+	fs::write("Makefile", makefile_content).context("Failed to write updated Makefile")?;
 
 	println!("Added dependencies: {:?}", added_deps);
 
 	Ok(())
 }
 
-pub fn remove_dependencies(dependency_names: &Vec<String>) -> Result<()> {
+pub fn remove_dependencies(dependency_names: &[String]) -> Result<()> {
 	const MAKEFILE: &str = "Makefile";
 	const INSTALL_DEPS_PREFIX: &str = "sudo apt install -y";
 
 	if !Path::new(MAKEFILE).exists() {
-		return Err(Error::new(
-			ErrorKind::NotFound,
-			"Makefile not found in the current directory. Cannot remove dependencies.",
-		));
+		anyhow::bail!("Makefile not found in the current directory. Cannot remove dependencies.");
 	}
 
 	let makefile_content = fs::read_to_string(MAKEFILE)?;
@@ -144,7 +130,7 @@ pub fn remove_dependencies(dependency_names: &Vec<String>) -> Result<()> {
 				} else {
 					updated_lines.push(line.to_string());
 				}
-				i += 1; // Skip the command line
+				i += 1;
 			} else {
 				updated_lines.push(line.to_string());
 			}
@@ -161,6 +147,6 @@ pub fn remove_dependencies(dependency_names: &Vec<String>) -> Result<()> {
 		println!("Dependencies {:?} not found in Makefile.", dependency_names);
 	}
 
-	fs::write(MAKEFILE, updated_lines.join("\n"))?;
+	fs::write(MAKEFILE, updated_lines.join("\n")).context("Failed to write updated Makefile")?;
 	Ok(())
 }

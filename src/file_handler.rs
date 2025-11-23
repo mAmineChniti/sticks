@@ -1,19 +1,20 @@
-use std::io::{Error, ErrorKind, Result};
+use anyhow::{Context, Result};
 use std::{env, fs};
 
 pub fn create_dir(project_name: &str) -> Result<()> {
-	let path = env::current_dir()?.join(project_name);
+	let path = env::current_dir()
+		.context("Failed to get current directory")?
+		.join(project_name);
 
 	if path.exists() {
-		return Err(Error::new(
-			ErrorKind::AlreadyExists,
-			format!("Directory '{}' already exists", project_name),
-		));
+		anyhow::bail!("Directory '{}' already exists", project_name);
 	}
 
-	fs::create_dir(&path)?;
+	fs::create_dir(&path)
+		.with_context(|| format!("Failed to create directory '{}'", project_name))?;
 
-	env::set_current_dir(&path)?;
+	env::set_current_dir(&path)
+		.with_context(|| format!("Failed to change to directory '{}'", project_name))?;
 
 	Ok(())
 }
