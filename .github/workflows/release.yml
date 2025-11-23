@@ -47,15 +47,18 @@ jobs:
           fi
 
       - name: Create Git Tag
-        if: steps.check.outputs.SHOULD_RELEASE == 'true' && github.event_name == 'push'
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
         run: |
+          echo "Creating tag v${{ steps.version.outputs.VERSION }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release v${{ steps.version.outputs.VERSION }}"
+          echo "Pushing tag to remote..."
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} "v${{ steps.version.outputs.VERSION }}"
+          echo "Tag created and pushed successfully"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.SHOULD_RELEASE == 'true' && github.event_name == 'push'
+        if: steps.check.outputs.SHOULD_RELEASE == 'true'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
