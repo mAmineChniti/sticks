@@ -17,6 +17,8 @@ jobs:
   check-version:
     name: Check Version and Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
       should_release: ${{ steps.check.outputs.SHOULD_RELEASE }}
@@ -24,6 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get version from Cargo.toml
         id: version
@@ -49,7 +52,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release v${{ steps.version.outputs.VERSION }}"
-          git push origin "v${{ steps.version.outputs.VERSION }}"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} "v${{ steps.version.outputs.VERSION }}"
 
       - name: Create GitHub Release
         if: steps.check.outputs.SHOULD_RELEASE == 'true' && github.event_name == 'push'
