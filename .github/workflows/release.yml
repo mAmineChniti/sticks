@@ -109,6 +109,8 @@ jobs:
   build-deb:
     name: Build Debian Package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
     steps:
@@ -147,6 +149,8 @@ jobs:
   build-arch:
     name: Build Arch Package Info
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
     steps:
@@ -189,6 +193,8 @@ jobs:
   build-binary:
     name: Build Binary for ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
     strategy:
