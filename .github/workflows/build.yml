@@ -23,9 +23,3 @@ jobs:
 
     - name: Build
       run: cargo build --release --verbose
-
-    - name: Install cargo-deb
-      run: cargo install cargo-deb
-
-    - name: Build deb
-      run: cargo deb
