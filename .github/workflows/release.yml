@@ -147,7 +147,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-arch:
-    name: Build Arch Package Info
+    name: Build Arch Linux Package
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -158,56 +158,57 @@ jobs:
         with:
           submodules: true
 
-      - name: Get package version
-        id: version
-        run: echo "VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)" >> $GITHUB_OUTPUT
-
       - name: Update PKGBUILD version
         run: |
-          sed -i "s/pkgver=.*/pkgver=${{ steps.version.outputs.VERSION }}/" sticks-aur/PKGBUILD
+          cd sticks-aur
+          sed -i "s/pkgver=.*/pkgver=${{ needs.check-version.outputs.version }}/" PKGBUILD
+          cat PKGBUILD | grep pkgver
 
-      - name: Upload PKGBUILD
+      - name: Build Arch package in container
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
+            pacman -Syu --noconfirm base-devel rust cargo git
+            useradd -m builder
+            chown -R builder:builder /workspace
+            su - builder -c 'cd /workspace/sticks-aur && makepkg --noconfirm -s 2>&1 | tail -20'
+            ls -lah /workspace/sticks-aur/*.pkg.tar.zst || echo 'Package not found'
+          "
+
+      - name: Find and verify package file
+        id: package
+        run: |
+          PKGFILE=$(find sticks-aur -name "*.pkg.tar.zst" -type f)
+          if [ -z "$PKGFILE" ]; then
+            echo "Error: No .pkg.tar.zst file found"
+            exit 1
+          fi
+          echo "PKGFILE=$PKGFILE" >> $GITHUB_OUTPUT
+          echo "PKGNAME=$(basename $PKGFILE)" >> $GITHUB_OUTPUT
+          echo "Found package: $PKGFILE"
+          ls -lh "$PKGFILE"
+
+      - name: Upload Arch package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sticks-pkgbuild
-          path: sticks-aur/PKGBUILD
+          name: sticks-arch-package
+          path: ${{ steps.package.outputs.PKGFILE }}
 
-      - name: Upload to release
+      - name: Upload Arch package to release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
-          files: sticks-aur/PKGBUILD
+          files: ${{ steps.package.outputs.PKGFILE }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update AUR repository
-        if: github.event_name == 'push'
-        run: |
-          cd sticks-aur
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add PKGBUILD
-          git diff --cached --quiet || git commit -m "Bump version to ${{ steps.version.outputs.VERSION }}"
-          git push origin master || echo "No changes to push"
-
   build-binary:
-    name: Build Binary for ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+    name: Build Generic Linux Binary
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: sticks
-            asset_name: sticks-linux-x86_64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            artifact_name: sticks
-            asset_name: sticks-linux-aarch64
 
     steps:
       - uses: actions/checkout@v4
@@ -216,45 +217,34 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.target }}
+          target: x86_64-unknown-linux-gnu
           profile: minimal
           override: true
-
-      - name: Install cross-compilation tools
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --release --target x86_64-unknown-linux-gnu
 
       - name: Strip binary
-        run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            aarch64-linux-gnu-strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-          else
-            strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-          fi
+        run: strip target/x86_64-unknown-linux-gnu/release/sticks
 
       - name: Rename binary
         run: |
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
-          chmod +x ${{ matrix.asset_name }}
+          cp target/x86_64-unknown-linux-gnu/release/sticks sticks-linux-x86_64
+          chmod +x sticks-linux-x86_64
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}
+          name: sticks-linux-x86_64
+          path: sticks-linux-x86_64
 
       - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
-          files: ${{ matrix.asset_name }}
+          files: sticks-linux-x86_64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
