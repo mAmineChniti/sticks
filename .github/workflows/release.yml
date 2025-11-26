@@ -164,14 +164,20 @@ jobs:
           sed -i "s/pkgver=.*/pkgver=${{ needs.check-version.outputs.version }}/" PKGBUILD
           cat PKGBUILD | grep pkgver
 
-      - name: Commit PKGBUILD changes
+      - name: Commit and push PKGBUILD changes
         run: |
           cd sticks-aur
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add PKGBUILD
-          git diff --cached --quiet || git commit -m "chore: update PKGBUILD to v${{ needs.check-version.outputs.version }}"
-          echo "PKGBUILD updated and committed"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update PKGBUILD to v${{ needs.check-version.outputs.version }}"
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/mAmineChniti/sticks-aur.git
+            git push origin master
+            echo "PKGBUILD updated and pushed to sticks-aur repository"
+          else
+            echo "No changes to PKGBUILD"
+          fi
 
       - name: Build Arch package in container
         run: |
