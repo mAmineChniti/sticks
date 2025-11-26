@@ -112,7 +112,7 @@ impl LanguageConsts for Language {
 impl FromStr for Language {
 	type Err = anyhow::Error;
 
-		fn from_str(input: &str) -> Result<Language, Self::Err> {
+	fn from_str(input: &str) -> Result<Language, Self::Err> {
 		match input.to_lowercase().as_str() {
 			"c" => Ok(Language::C),
 			"cpp" => Ok(Language::Cpp),
