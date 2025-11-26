@@ -146,14 +146,3 @@ pub fn update_project() -> Result<()> {
 
 	Ok(())
 }
-
-fn dirs_home_dir() -> Option<PathBuf> {
-	env::var_os("HOME").map(PathBuf::from)
-}
-
-mod dirs {
-	use super::*;
-	pub fn home_dir() -> Option<PathBuf> {
-		dirs_home_dir()
-	}
-}

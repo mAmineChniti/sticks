@@ -12,6 +12,7 @@ documentation = "https://github.com/mAmineChniti/sticks/blob/master/README.md"
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4", features = ["derive"] }
+dirs = "5.0"
 
 [dev-dependencies]
 serial_test = "3.2"

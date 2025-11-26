@@ -8,48 +8,48 @@ pub trait LanguageConsts {
 	fn generate_makefile_content(&self, project_name: &str) -> String {
 		format!(
 			"# Compiler and flags\n\
-             CC = {}\n\
-             CFLAGS = -Wall -Wextra -Werror -O2 -g\n\
-             LDFLAGS =\n\
-             \n\
-             # Directories\n\
-             SRC_DIR = src\n\
-             BUILD_DIR = build\n\
-             \n\
-             # Source files\n\
-             SRCS = $(wildcard $(SRC_DIR)/*.{})\n\
-             OBJS = $(SRCS:$(SRC_DIR)/%.{}=$(BUILD_DIR)/%.o)\n\
-             \n\
-             # Target executable\n\
-             TARGET = {}\n\
-             \n\
-             # Default target\n\
-             all: $(TARGET)\n\
-             \n\
-             # Build target\n\
-             $(TARGET): $(OBJS)\n\
-             \t@mkdir -p $(BUILD_DIR)\n\
-             \t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)\n\
-             \t@echo \"Build complete: $(TARGET)\"\n\
-             \n\
-             # Compile source files\n\
-             $(BUILD_DIR)/%.o: $(SRC_DIR)/%.{}\n\
-             \t@mkdir -p $(BUILD_DIR)\n\
-             \t$(CC) $(CFLAGS) -c $< -o $@\n\
-             \n\
-             # Clean build artifacts\n\
-             clean:\n\
-             \t@rm -rf $(BUILD_DIR) $(TARGET)\n\
-             \t@echo \"Cleaned build artifacts\"\n\
-             \n\
-             # Run the program\n\
-             run: $(TARGET)\n\
-             \t./$(TARGET)\n\
-             \n\
-             # Rebuild\n\
-             rebuild: clean all\n\
-             \n\
-             .PHONY: all clean run rebuild\n",
+			CC = {}\n\
+			CFLAGS = -Wall -Wextra -Werror -O2 -g\n\
+			LDFLAGS =\n\
+			\n\
+			# Directories\n\
+			SRC_DIR = src\n\
+			BUILD_DIR = build\n\
+			\n\
+			# Source files\n\
+			SRCS = $(wildcard $(SRC_DIR)/*.{})\n\
+			OBJS = $(SRCS:$(SRC_DIR)/%.{}=$(BUILD_DIR)/%.o)\n\
+			\n\
+			# Target executable\n\
+			TARGET = {}\n\
+			\n\
+			# Default target\n\
+			all: $(TARGET)\n\
+			\n\
+			# Build target\n\
+			$(TARGET): $(OBJS)\n\
+			\t@mkdir -p $(BUILD_DIR)\n\
+			\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)\n\
+			\t@echo \"Build complete: $(TARGET)\"\n\
+			\n\
+			# Compile source files\n\
+			$(BUILD_DIR)/%.o: $(SRC_DIR)/%.{}\n\
+			\t@mkdir -p $(BUILD_DIR)\n\
+			\t$(CC) $(CFLAGS) -c $< -o $@\n\
+			\n\
+			# Clean build artifacts\n\
+			clean:\n\
+			\t@rm -rf $(BUILD_DIR) $(TARGET)\n\
+			\t@echo \"Cleaned build artifacts\"\n\
+			\n\
+			# Run the program\n\
+			run: $(TARGET)\n\
+			\t./$(TARGET)\n\
+			\n\
+			# Rebuild\n\
+			rebuild: clean all\n\
+			\n\
+			.PHONY: all clean run rebuild\n",
 			self.cc(),
 			self.extension(),
 			self.extension(),
