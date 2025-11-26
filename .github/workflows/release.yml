@@ -164,6 +164,15 @@ jobs:
           sed -i "s/pkgver=.*/pkgver=${{ needs.check-version.outputs.version }}/" PKGBUILD
           cat PKGBUILD | grep pkgver
 
+      - name: Commit PKGBUILD changes
+        run: |
+          cd sticks-aur
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD
+          git diff --cached --quiet || git commit -m "chore: update PKGBUILD to v${{ needs.check-version.outputs.version }}"
+          echo "PKGBUILD updated and committed"
+
       - name: Build Arch package in container
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
