@@ -188,9 +188,10 @@ jobs:
       - name: Find and verify package file
         id: package
         run: |
-          PKGFILE=$(find sticks-aur -name "*.pkg.tar.zst" -type f)
+          # Find the release package (exclude debug)
+          PKGFILE=$(find sticks-aur -name "sticks-*-x86_64.pkg.tar.zst" -not -name "*-debug-*" -type f | head -1)
           if [ -z "$PKGFILE" ]; then
-            echo "Error: No .pkg.tar.zst file found"
+            echo "Error: No release package found"
             exit 1
           fi
           echo "PKGFILE=$PKGFILE" >> $GITHUB_OUTPUT
