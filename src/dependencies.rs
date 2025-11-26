@@ -4,7 +4,7 @@ use std::path::Path;
 
 pub fn add_dependencies(dependency_names: &[String]) -> Result<()> {
 	if !Path::new("Makefile").exists() {
-		anyhow::bail!("Makefile not found in the current directory. Cannot add dependencies.");
+		anyhow::bail!("Makefile not found in the current directory");
 	}
 
 	let mut makefile_content = fs::read_to_string("Makefile").context("Failed to read Makefile")?;
@@ -67,7 +67,7 @@ pub fn remove_dependencies(dependency_names: &[String]) -> Result<()> {
 	const INSTALL_DEPS_PREFIX: &str = "sudo apt install -y";
 
 	if !Path::new(MAKEFILE).exists() {
-		anyhow::bail!("Makefile not found in the current directory. Cannot remove dependencies.");
+		anyhow::bail!("Makefile not found in the current directory");
 	}
 
 	let makefile_content = fs::read_to_string(MAKEFILE)?;

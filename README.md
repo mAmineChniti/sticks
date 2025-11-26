@@ -23,9 +23,11 @@
 ## Features
 
 - 🚀 **Quick Project Setup** - Create new C/C++ projects with a single command
-- 📁 **Smart Structure** - Auto-generates organized project structure with source files and Makefile
+- 📁 **Multiple Build Systems** - Support for both Makefile and CMake
+- 🔨 **Smart Structure** - Auto-generates organized project structure with source files and build configs
 - 📦 **Dependency Management** - Easily add/remove dependencies in your Makefile
-- 🔧 **Multi-Source Support** - Add multiple source files with automatic Makefile integration
+- 🔧 **Multi-Source Support** - Add multiple source files with automatic build integration
+- 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings
 - 🔄 **Self-Updating** - Built-in update mechanism that downloads from GitHub releases
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
 - ✅ **Quality Assured** - Comprehensive test suite with 18 automated tests
@@ -61,7 +63,7 @@ See [sticks-aur](https://github.com/mAmineChniti/sticks-aur) for AUR packaging d
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.0-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.0-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -70,15 +72,9 @@ sudo dpkg -i sticks_*.deb
 ### 🚀 Pre-built Binaries
 
 ```bash
-# x86_64
 wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-linux-x86_64
 chmod +x sticks-linux-x86_64
 sudo mv sticks-linux-x86_64 /usr/local/bin/sticks
-
-# aarch64
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-linux-aarch64
-chmod +x sticks-linux-aarch64
-sudo mv sticks-linux-aarch64 /usr/local/bin/sticks
 ```
 
 ### 🦀 From Cargo
@@ -108,8 +104,12 @@ cp target/release/sticks ~/.local/bin/         # User only
 ## Quick Start
 
 ```bash
-# Create a new C++ project
+# Create a new C++ project with Makefile (default)
 sticks cpp my-project
+cd my-project
+
+# Or with CMake build system
+sticks cpp my-project --build cmake
 cd my-project
 
 # Add a dependency
@@ -130,20 +130,22 @@ make
 **Create a new project in a subdirectory:**
 
 ```bash
-sticks c my-c-project       # New C project
-sticks cpp my-cpp-project   # New C++ project
+sticks c my-c-project       # New C project with Makefile
+sticks cpp my-cpp-project   # New C++ project with Makefile
 ```
 
-This creates a directory with:
-- `src/` directory with a "Hello, World!" program
-- `build/` directory for build artifacts
-- `Makefile` with sensible defaults (debug/release builds, clean target)
+**Create with CMake build system:**
+
+```bash
+sticks c my-project --build cmake       # C project with CMake
+sticks cpp my-project --build cmake     # C++ project with CMake
+```
 
 **Initialize in current directory:**
 
 ```bash
-sticks init c     # Initialize C project here
-sticks init cpp   # Initialize C++ project here
+sticks init c               # Initialize C project here
+sticks init cpp --build cmake  # Initialize C++ project with CMake
 ```
 
 ### Managing Dependencies
@@ -169,14 +171,27 @@ Cleans up the `install-deps` rule automatically when empty.
 ### Adding Source Files
 
 ```bash
-sticks src utils               # Adds src/utils.cpp (or .c) and include/utils.h
+sticks src utils               # Adds src/utils.cpp (or .c) and header
 sticks src network database    # Add multiple source files
 ```
 
 Sticks will:
+
 - Create source files in `src/`
-- Create corresponding headers in `include/`
-- Update Makefile to compile and link new sources
+- Create corresponding headers
+- Update build file (Makefile or CMakeLists.txt) automatically
+
+### Generated Configuration Files
+
+When you create a project, Sticks automatically generates:
+
+- **Build System Files:** `Makefile` or `CMakeLists.txt` (your choice)
+- **Git:** `.gitignore`, `.gitattributes` (pre-configured for C/C++)
+- **Code Style:** `.editorconfig`, `.clang-format` (consistent formatting)
+- **IDE:** VSCode `.vscode/settings.json`, `launch.json`, `tasks.json`
+- **Documentation:** `README.md` (project-specific template)
+
+This gives you a professional, production-ready project structure out of the box!
 
 ### Getting Help
 
@@ -205,7 +220,7 @@ sudo pacman -Syu sticks
 yay -Syu
 
 # Debian/Ubuntu (download new .deb)
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.0-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.0-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 
 # Cargo installation
@@ -255,7 +270,7 @@ my-project/
 - **Dependencies:** clap 4, anyhow (build-time only)
 - **Dev Dependencies:** serial_test (for isolated test execution)
 - **Runtime Requirements:** GCC (for compiling your C/C++ projects)
-- **Supported Architectures:** x86_64, aarch64
+- **Supported Architectures:** x86_64
 - **Supported Platforms:** Linux (Arch, Debian, Ubuntu, others)
 - **Test Coverage:** 18 comprehensive tests covering all core functionality
 - **CI/CD:** Automated testing, building, and releases via GitHub Actions
@@ -278,12 +293,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 - [X] Batch dependency operations
 - [X] CI/CD pipeline with automated releases
 - [X] Self-update mechanism without Cargo dependency
-- [X] Multi-architecture support (x86_64, aarch64)
+- [X] Multi-architecture support (x86_64)
 - [X] Comprehensive test suite with automated testing
 - [X] Quality gates in CI/CD (tests run before releases)
+- [X] CMake support alongside Makefile
+- [X] Auto-generated .gitignore, .editorconfig, .clang-format
+- [X] VSCode integration (settings, launch config, tasks)
+- [X] Auto-generated README templates
 - [ ] Integration tests for end-to-end workflows
 - [ ] Template system for custom project structures
-- [ ] CMake support alongside Makefile
+- [ ] Package manager integration (conan, vcpkg)
 - [ ] Plugin system for extending functionality
 - [ ] Code coverage reporting
 

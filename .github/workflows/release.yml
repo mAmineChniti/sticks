@@ -176,12 +176,14 @@ jobs:
       - name: Build Arch package in container
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
+            set -e
             pacman -Syu --noconfirm base-devel rust cargo git
             useradd -m builder
             chown -R builder:builder /workspace
-            su - builder -c 'cd /workspace/sticks-aur && makepkg --noconfirm -s 2>&1 | tail -20'
-            ls -lah /workspace/sticks-aur/*.pkg.tar.zst || echo 'Package not found'
-          "
+            echo 'Building package...'
+            su - builder -c 'cd /workspace/sticks-aur && makepkg --noconfirm -s'
+            echo 'Build completed successfully'
+          " || { echo "Error: makepkg failed inside container"; exit 1; }
 
       - name: Find and verify package file
         id: package

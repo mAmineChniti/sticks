@@ -1,13 +1,13 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use sticks::{
-	add_dependencies, add_sources, init_project, new_project, remove_dependencies, update_project,
+	add_dependencies, add_sources, remove_dependencies, update_project,
 	Language,
 };
 
 #[derive(Parser)]
 #[command(name = "sticks")]
-#[command(version, about = "A tool for managing C and C++ projects", long_about = None)]
+#[command(version, about = "A tool for managing C and C++ projects")]
 struct Cli {
 	#[command(subcommand)]
 	command: Commands,
@@ -15,25 +15,38 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+	#[command(about = "Create a new C project in a subdirectory")]
 	C {
 		project_name: Vec<String>,
+		#[arg(long, short, default_value = "makefile", help = "Build system: 'makefile' or 'cmake'")]
+		build: String,
 	},
+	#[command(about = "Create a new C++ project in a subdirectory")]
 	Cpp {
 		project_name: Vec<String>,
+		#[arg(long, short, default_value = "makefile", help = "Build system: 'makefile' or 'cmake'")]
+		build: String,
 	},
+	#[command(about = "Initialize a project in the current directory")]
 	Init {
 		#[arg(value_parser = ["c", "cpp"])]
 		language: String,
+		#[arg(long, short, default_value = "makefile", help = "Build system: 'makefile' or 'cmake'")]
+		build: String,
 	},
+	#[command(about = "Add dependencies to your project's Makefile")]
 	Add {
 		dependency_name: Vec<String>,
 	},
+	#[command(about = "Remove dependencies from your project's Makefile")]
 	Remove {
 		dependency_name: Vec<String>,
 	},
+	#[command(about = "Add new source files to your project")]
 	Src {
 		source_names: Vec<String>,
 	},
+	#[command(about = "Update sticks to the latest version")]
 	Update,
 }
 
@@ -48,19 +61,22 @@ fn run() -> Result<()> {
 	let cli = Cli::parse();
 
 	match cli.command {
-		Commands::C { project_name } => {
+		Commands::C { project_name, build } => {
+			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				new_project(&name, Language::C)?;
+				sticks::create_project_with_system(&name, Language::C, build_system)?;
 			}
 		}
-		Commands::Cpp { project_name } => {
+		Commands::Cpp { project_name, build } => {
+			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				new_project(&name, Language::Cpp)?;
+				sticks::create_project_with_system(&name, Language::Cpp, build_system)?;
 			}
 		}
-		Commands::Init { language } => {
+		Commands::Init { language, build } => {
 			let lang = language.parse::<Language>()?;
-			init_project(lang)?;
+			let build_system = build.parse::<sticks::BuildSystem>()?;
+			sticks::init_project_with_system(lang, build_system)?;
 		}
 		Commands::Add { dependency_name } => {
 			add_dependencies(&dependency_name)?;
