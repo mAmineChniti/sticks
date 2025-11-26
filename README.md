@@ -63,7 +63,7 @@ See [sticks-aur](https://github.com/mAmineChniti/sticks-aur) for AUR packaging d
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.1-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.0-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -220,7 +220,7 @@ sudo pacman -Syu sticks
 yay -Syu
 
 # Debian/Ubuntu (download new .deb)
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.0-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.0-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 
 # Cargo installation
