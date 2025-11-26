@@ -61,7 +61,7 @@ See [sticks-aur](https://github.com/mAmineChniti/sticks-aur) for AUR packaging d
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.0-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.2.1-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -70,15 +70,9 @@ sudo dpkg -i sticks_*.deb
 ### 🚀 Pre-built Binaries
 
 ```bash
-# x86_64
 wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-linux-x86_64
 chmod +x sticks-linux-x86_64
 sudo mv sticks-linux-x86_64 /usr/local/bin/sticks
-
-# aarch64
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-linux-aarch64
-chmod +x sticks-linux-aarch64
-sudo mv sticks-linux-aarch64 /usr/local/bin/sticks
 ```
 
 ### 🦀 From Cargo
@@ -255,7 +249,7 @@ my-project/
 - **Dependencies:** clap 4, anyhow (build-time only)
 - **Dev Dependencies:** serial_test (for isolated test execution)
 - **Runtime Requirements:** GCC (for compiling your C/C++ projects)
-- **Supported Architectures:** x86_64, aarch64
+- **Supported Architectures:** x86_64
 - **Supported Platforms:** Linux (Arch, Debian, Ubuntu, others)
 - **Test Coverage:** 18 comprehensive tests covering all core functionality
 - **CI/CD:** Automated testing, building, and releases via GitHub Actions

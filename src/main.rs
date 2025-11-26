@@ -7,7 +7,7 @@ use sticks::{
 
 #[derive(Parser)]
 #[command(name = "sticks")]
-#[command(version, about = "A tool for managing C and C++ projects", long_about = None)]
+#[command(version, about = "A tool for managing C and C++ projects")]
 struct Cli {
 	#[command(subcommand)]
 	command: Commands,
@@ -15,25 +15,32 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+	#[command(about = "Create a new C project in a subdirectory")]
 	C {
 		project_name: Vec<String>,
 	},
+	#[command(about = "Create a new C++ project in a subdirectory")]
 	Cpp {
 		project_name: Vec<String>,
 	},
+	#[command(about = "Initialize a project in the current directory")]
 	Init {
 		#[arg(value_parser = ["c", "cpp"])]
 		language: String,
 	},
+	#[command(about = "Add dependencies to your project's Makefile")]
 	Add {
 		dependency_name: Vec<String>,
 	},
+	#[command(about = "Remove dependencies from your project's Makefile")]
 	Remove {
 		dependency_name: Vec<String>,
 	},
+	#[command(about = "Add new source files to your project")]
 	Src {
 		source_names: Vec<String>,
 	},
+	#[command(about = "Update sticks to the latest version")]
 	Update,
 }
 

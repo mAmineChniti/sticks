@@ -35,10 +35,8 @@ fn get_install_path() -> Result<PathBuf> {
 fn get_architecture() -> &'static str {
 	#[cfg(target_arch = "x86_64")]
 	return "x86_64";
-	#[cfg(target_arch = "aarch64")]
-	return "aarch64";
-	#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-	return "unknown";
+	#[cfg(not(target_arch = "x86_64"))]
+	return "unsupported";
 }
 
 fn get_current_version() -> String {
@@ -72,8 +70,8 @@ pub fn update_project() -> Result<()> {
 
 	let current_version = get_current_version();
 	let arch = get_architecture();
-	if arch == "unknown" {
-		anyhow::bail!("Unsupported architecture. Please update manually.");
+	if arch == "unsupported" {
+		anyhow::bail!("Unsupported architecture: only x86_64 is supported. Please update manually.");
 	}
 
 	let install_path = get_install_path()?;
