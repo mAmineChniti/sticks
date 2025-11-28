@@ -1,12 +1,19 @@
-use sticks::create_dir;
+use serial_test::serial;
 use std::env;
 use std::fs;
-use serial_test::serial;
+use sticks::create_dir;
 
 #[test]
 #[serial]
 fn test_create_dir_success() {
-	let temp_dir = env::temp_dir().join(format!("sticks_test_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
 	let test_dir_name = "test_project";
 	let original_dir = env::current_dir().unwrap();
 
@@ -27,7 +34,14 @@ fn test_create_dir_success() {
 #[test]
 #[serial]
 fn test_create_dir_already_exists() {
-	let temp_dir = env::temp_dir().join(format!("sticks_test_exists_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_exists_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
 	let test_dir_name = "existing_project";
 	let original_dir = env::current_dir().unwrap();
 

@@ -45,7 +45,10 @@ fn get_current_version() -> String {
 
 fn get_latest_version() -> Result<String> {
 	let output = Command::new("curl")
-		.args(["-s", "https://api.github.com/repos/mAmineChniti/sticks/releases/latest"])
+		.args([
+			"-s",
+			"https://api.github.com/repos/mAmineChniti/sticks/releases/latest",
+		])
 		.output()
 		.context("Failed to fetch latest release information")?;
 
@@ -54,15 +57,17 @@ fn get_latest_version() -> Result<String> {
 	}
 
 	let json = String::from_utf8_lossy(&output.stdout);
-	for line in json.lines() {
-		if line.trim().starts_with("\"tag_name\"") {
-			if let Some(version) = line.split('"').nth(3) {
-				return Ok(version.trim_start_matches('v').to_string());
-			}
+
+	// Extract tag_name from JSON response using a more robust approach
+	if let Some(tag_start) = json.find("\"tag_name\":\"") {
+		let version_str = &json[tag_start + 12..];
+		if let Some(tag_end) = version_str.find('"') {
+			let version = version_str[..tag_end].trim_start_matches('v').to_string();
+			return Ok(version);
 		}
 	}
 
-	anyhow::bail!("Could not parse version from GitHub API")
+	anyhow::bail!("Could not parse version from GitHub API response")
 }
 
 pub fn update_project() -> Result<()> {
@@ -71,21 +76,29 @@ pub fn update_project() -> Result<()> {
 	let current_version = get_current_version();
 	let arch = get_architecture();
 	if arch == "unsupported" {
-		anyhow::bail!("Unsupported architecture: only x86_64 is supported. Please update manually.");
+		anyhow::bail!(
+			"Unsupported architecture: only x86_64 is supported. Please update manually."
+		);
 	}
 
 	let install_path = get_install_path()?;
-	let is_system_install = install_path.starts_with("/usr/bin")
-		|| install_path.starts_with("/usr/local/bin");
+	let is_system_install =
+		install_path.starts_with("/usr/bin") || install_path.starts_with("/usr/local/bin");
 
 	let latest_version = get_latest_version().context("Failed to check for updates")?;
 
 	if current_version == latest_version {
-		println!("✓ You're already on the latest version (v{})!", current_version);
+		println!(
+			"✓ You're already on the latest version (v{})!",
+			current_version
+		);
 		return Ok(());
 	}
 
-	println!("📦 Update available: v{} → v{}", current_version, latest_version);
+	println!(
+		"📦 Update available: v{} → v{}",
+		current_version, latest_version
+	);
 
 	if is_system_install {
 		println!();
@@ -141,7 +154,10 @@ pub fn update_project() -> Result<()> {
 	fs::remove_dir_all(&temp_dir).ok();
 
 	println!();
-	println!("✓ Successfully upgraded from v{} to v{}!", current_version, latest_version);
+	println!(
+		"✓ Successfully upgraded from v{} to v{}!",
+		current_version, latest_version
+	);
 	println!("💡 Run 'sticks --version' to verify the installation.");
 
 	Ok(())

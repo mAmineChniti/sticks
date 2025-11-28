@@ -42,19 +42,21 @@ Choose the installation method that works best for you:
 <details>
 <summary><b>Arch Linux (AUR)</b></summary>
 
+**Package Name:** `sticks-aur`
+
 ```bash
 # Using an AUR helper (recommended)
-yay -S sticks
+yay -S sticks-aur
 # or
-paru -S sticks
+paru -S sticks-aur
 
-# Or manually
-git clone https://aur.archlinux.org/sticks.git
-cd sticks
+# Or manually clone from AUR
+git clone https://aur.archlinux.org/sticks-aur.git
+cd sticks-aur
 makepkg -si
 ```
 
-See [sticks-aur](https://github.com/mAmineChniti/sticks-aur) for AUR packaging details.
+See [sticks-aur repository](https://github.com/mAmineChniti/sticks-aur) for packaging details.
 
 </details>
 
@@ -214,10 +216,12 @@ This downloads the latest binary from GitHub releases and replaces your installa
 **Alternative update methods:**
 
 ```bash
-# Arch Linux (package manager)
-sudo pacman -Syu sticks
-# or with AUR helper
-yay -Syu
+# Arch Linux (using AUR package manager)
+# Package name: sticks-aur
+sudo pacman -Syu  # Update package database first
+yay -Syu sticks-aur
+# or
+paru -Syu sticks-aur
 
 # Debian/Ubuntu (download new .deb)
 wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.0-1_amd64.deb
@@ -233,8 +237,10 @@ cargo install sticks --force
 # Cargo installation
 cargo uninstall sticks
 
-# Arch Linux
-yay -R sticks
+# Arch Linux (AUR package name: sticks-aur)
+yay -R sticks-aur
+# or
+paru -R sticks-aur
 
 # Debian/Ubuntu
 sudo apt remove sticks
