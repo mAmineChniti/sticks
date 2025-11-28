@@ -2,8 +2,7 @@ use crate::languages::Language;
 
 pub fn generate_gitignore(language: Language) -> String {
 	match language {
-		Language::C | Language::Cpp => format!(
-			"# Build artifacts\n\
+		Language::C | Language::Cpp => "# Build artifacts\n\
 			build/\n\
 			cmake-build-*/\n\
 			*.o\n\
@@ -42,7 +41,7 @@ pub fn generate_gitignore(language: Language) -> String {
 			# Testing\n\
 			test_*\n\
 			my_project/\n"
-		),
+			.to_string(),
 	}
 }
 

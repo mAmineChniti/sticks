@@ -1,13 +1,20 @@
-use sticks::{create_project, init_project, new_project, Language};
+use serial_test::serial;
 use std::env;
 use std::fs;
 use std::path::Path;
-use serial_test::serial;
+use sticks::{create_project, init_project, new_project, Language};
 
 #[test]
 #[serial]
 fn test_create_project_c() {
-	let temp_dir = env::temp_dir().join(format!("sticks_test_project_c_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_project_c_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
 	let original_dir = env::current_dir().unwrap();
 
 	fs::remove_dir_all(&temp_dir).ok();
@@ -15,7 +22,11 @@ fn test_create_project_c() {
 	env::set_current_dir(&temp_dir).unwrap();
 
 	let result = create_project("test_c_proj", Language::C);
-	assert!(result.is_ok(), "Failed to create project: {:?}", result.err());
+	assert!(
+		result.is_ok(),
+		"Failed to create project: {:?}",
+		result.err()
+	);
 
 	assert!(Path::new("src").exists());
 	assert!(Path::new("src/main.c").exists());
@@ -34,7 +45,14 @@ fn test_create_project_c() {
 #[test]
 #[serial]
 fn test_create_project_cpp() {
-	let temp_dir = env::temp_dir().join(format!("sticks_test_project_cpp_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_project_cpp_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
 	let original_dir = env::current_dir().unwrap();
 
 	fs::remove_dir_all(&temp_dir).ok();
@@ -42,7 +60,11 @@ fn test_create_project_cpp() {
 	env::set_current_dir(&temp_dir).unwrap();
 
 	let result = create_project("test_cpp_proj", Language::Cpp);
-	assert!(result.is_ok(), "Failed to create project: {:?}", result.err());
+	assert!(
+		result.is_ok(),
+		"Failed to create project: {:?}",
+		result.err()
+	);
 
 	assert!(Path::new("src").exists());
 	assert!(Path::new("src/main.cpp").exists());
@@ -61,7 +83,14 @@ fn test_create_project_cpp() {
 #[test]
 #[serial]
 fn test_new_project() {
-	let temp_dir = env::temp_dir().join(format!("sticks_test_new_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_new_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
 	let original_dir = env::current_dir().unwrap();
 
 	fs::remove_dir_all(&temp_dir).ok();
@@ -84,7 +113,14 @@ fn test_new_project() {
 #[test]
 #[serial]
 fn test_init_project() {
-	let temp_dir = env::temp_dir().join(format!("sticks_test_init_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_init_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
 	let original_dir = env::current_dir().unwrap();
 
 	fs::remove_dir_all(&temp_dir).ok();

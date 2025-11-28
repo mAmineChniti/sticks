@@ -23,7 +23,10 @@ impl FromStr for BuildSystem {
 		match input.to_lowercase().as_str() {
 			"makefile" | "make" => Ok(BuildSystem::Makefile),
 			"cmake" => Ok(BuildSystem::CMake),
-			_ => anyhow::bail!("Unsupported build system: {}. Use 'makefile' or 'cmake'", input),
+			_ => anyhow::bail!(
+				"Unsupported build system: {}. Use 'makefile' or 'cmake'",
+				input
+			),
 		}
 	}
 }
