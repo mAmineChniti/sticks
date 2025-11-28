@@ -5,7 +5,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
 
-const GITHUB_REPO: &str = "https://github.com/mAmineChniti/sticks/releases/latest/download";
+use crate::constants::{github, install_paths};
 
 fn get_install_path() -> Result<PathBuf> {
 	if let Ok(output) = Command::new("which").arg("sticks").output() {
@@ -16,10 +16,10 @@ fn get_install_path() -> Result<PathBuf> {
 	}
 
 	let paths = vec![
-		PathBuf::from("/usr/local/bin/sticks"),
-		PathBuf::from("/usr/bin/sticks"),
+		PathBuf::from(install_paths::USR_LOCAL_BIN),
+		PathBuf::from(install_paths::USR_BIN),
 		dirs::home_dir()
-			.map(|h| h.join(".cargo/bin/sticks"))
+			.map(|h| h.join(install_paths::CARGO_BIN_SUFFIX))
 			.unwrap_or_default(),
 	];
 
@@ -45,10 +45,7 @@ fn get_current_version() -> String {
 
 fn get_latest_version() -> Result<String> {
 	let output = Command::new("curl")
-		.args([
-			"-s",
-			"https://api.github.com/repos/mAmineChniti/sticks/releases/latest",
-		])
+		.args(["-s", github::RELEASE_API_URL])
 		.output()
 		.context("Failed to fetch latest release information")?;
 
@@ -119,7 +116,7 @@ pub fn update_project() -> Result<()> {
 	fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
 
 	let binary_name = format!("sticks-linux-{}", arch);
-	let download_url = format!("{}/{}", GITHUB_REPO, binary_name);
+	let download_url = format!("{}/{}", github::RELEASE_DOWNLOAD_URL, binary_name);
 	let temp_binary = temp_dir.join("sticks");
 
 	let status = Command::new("curl")
