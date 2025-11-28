@@ -2,3 +2,4 @@
 	path = sticks-aur
 	url = https://github.com/mAmineChniti/sticks-aur.git
 	branch = master
+	update = merge
