@@ -172,8 +172,8 @@ jobs:
           git add PKGBUILD
           if ! git diff --cached --quiet; then
             git commit -m "chore: update PKGBUILD to v${{ needs.check-version.outputs.version }}"
-            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/mAmineChniti/sticks-aur.git
-            git push origin master
+            # Use https with token for authentication
+            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/mAmineChniti/sticks-aur.git" HEAD:master
             echo "PKGBUILD updated and pushed to sticks-aur repository"
           else
             echo "No changes to PKGBUILD"
