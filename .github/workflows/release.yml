@@ -156,7 +156,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Initialize and update submodule
+        run: |
+          git submodule update --init --recursive
+          cd sticks-aur
+          git remote set-url origin "https://x-access-token:${{ secrets.STICKS_PAT }}@github.com/mAmineChniti/sticks-aur.git"
+
+      - name: Configure git author
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Update PKGBUILD version
         run: |
@@ -167,12 +179,10 @@ jobs:
       - name: Commit and push PKGBUILD changes
         run: |
           cd sticks-aur
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add PKGBUILD
           if ! git diff --cached --quiet; then
             git commit -m "chore: update PKGBUILD to v${{ needs.check-version.outputs.version }}"
-            git push "https://x-access-token:${{ secrets.STICKS_PAT }}@github.com/mAmineChniti/sticks-aur.git" HEAD:master
+            git push origin master
             echo "PKGBUILD updated and pushed to sticks-aur repository"
           else
             echo "No changes to PKGBUILD"
