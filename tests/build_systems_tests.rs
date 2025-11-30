@@ -1,5 +1,5 @@
-use sticks::{BuildSystem, BuildSystemGenerator, CMakeGenerator, Language, MakefileGenerator};
 use std::str::FromStr;
+use sticks::{BuildSystem, BuildSystemGenerator, CMakeGenerator, Language, MakefileGenerator};
 
 #[test]
 fn test_build_system_display() {

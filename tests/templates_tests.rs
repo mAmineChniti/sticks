@@ -1,6 +1,6 @@
 use sticks::{
-	generate_clang_format_config, generate_editorconfig, generate_gitattributes, generate_gitignore,
-	generate_precommit_hook, generate_readme, generate_vscode_launch_config,
+	generate_clang_format_config, generate_editorconfig, generate_gitattributes,
+	generate_gitignore, generate_precommit_hook, generate_readme, generate_vscode_launch_config,
 	generate_vscode_settings, generate_vscode_tasks_config, Language,
 };
 
