@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use sticks::{add_dependencies, add_sources, remove_dependencies, update_project, Language};
 use std::env;
+use sticks::{add_dependencies, add_sources, remove_dependencies, update_project, Language};
 
 #[derive(Parser)]
 #[command(name = "sticks")]

@@ -1,4 +1,4 @@
-use crate::{Language, BuildSystem};
+use crate::{BuildSystem, Language};
 use anyhow::Result;
 use std::io::{self, Read, Write};
 
