@@ -30,8 +30,6 @@ fn test_select_language_interactive_returns_language() {
 	env::set_current_dir(&temp_dir).unwrap();
 
 	let result = std::panic::catch_unwind(|| {
-		// We can't easily test interactive functions that read from stdin
-		// But we can verify they are exported and callable
 		let _ = sticks::interactive::select_language;
 	});
 
@@ -44,7 +42,6 @@ fn test_select_language_interactive_returns_language() {
 #[test]
 #[serial]
 fn test_interactive_module_functions_exported() {
-	// Verify that the interactive module functions are properly exported from lib
 	let result = std::panic::catch_unwind(|| {
 		let _select_language = sticks::interactive::select_language;
 		let _select_build_system = sticks::interactive::select_build_system;
