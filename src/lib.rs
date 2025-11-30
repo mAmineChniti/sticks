@@ -2,6 +2,7 @@ pub mod build_systems;
 pub mod constants;
 pub mod dependencies;
 mod file_handler;
+pub mod interactive;
 pub mod languages;
 pub mod sources;
 pub mod templates;

@@ -1,13 +1,15 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::env;
 use sticks::{add_dependencies, add_sources, remove_dependencies, update_project, Language};
 
 #[derive(Parser)]
 #[command(name = "sticks")]
 #[command(version, about = "A tool for managing C and C++ projects")]
+#[command(args_conflicts_with_subcommands = true)]
 struct Cli {
 	#[command(subcommand)]
-	command: Commands,
+	command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -35,9 +37,10 @@ enum Commands {
 		build: String,
 	},
 	#[command(about = "Initialize a project in the current directory")]
+	#[command(visible_alias = "i")]
 	Init {
 		#[arg(value_parser = ["c", "cpp"])]
-		language: String,
+		language: Option<String>,
 		#[arg(
 			long,
 			short,
@@ -47,12 +50,16 @@ enum Commands {
 		build: String,
 	},
 	#[command(about = "Add dependencies to your project's Makefile")]
+	#[command(visible_alias = "a")]
 	Add { dependency_name: Vec<String> },
 	#[command(about = "Remove dependencies from your project's Makefile")]
+	#[command(visible_alias = "r")]
 	Remove { dependency_name: Vec<String> },
 	#[command(about = "Add new source files to your project")]
+	#[command(visible_alias = "s")]
 	Src { source_names: Vec<String> },
 	#[command(about = "Update sticks to the latest version")]
+	#[command(visible_alias = "u")]
 	Update,
 }
 
@@ -64,9 +71,25 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-	let cli = Cli::parse();
+	let args: Vec<String> = env::args().collect();
 
-	match cli.command {
+	// Handle interactive mode when called with no arguments
+	if args.len() == 1 {
+		return sticks::interactive::run_interactive();
+	}
+
+	// Parse shortcuts and convert to full commands
+	let args = handle_shortcuts(args);
+
+	let cli = Cli::parse_from(&args);
+
+	// If no command provided, show interactive mode
+	let command = match cli.command {
+		Some(cmd) => cmd,
+		None => return sticks::interactive::run_interactive(),
+	};
+
+	match command {
 		Commands::C {
 			project_name,
 			build,
@@ -74,7 +97,7 @@ fn run() -> Result<()> {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				sticks::create_project_with_system(&name, Language::C, build_system)?;
+				sticks::new_project_with_system(&name, Language::C, build_system)?;
 			}
 		}
 		Commands::Cpp {
@@ -84,11 +107,17 @@ fn run() -> Result<()> {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				sticks::create_project_with_system(&name, Language::Cpp, build_system)?;
+				sticks::new_project_with_system(&name, Language::Cpp, build_system)?;
 			}
 		}
 		Commands::Init { language, build } => {
-			let lang = language.parse::<Language>()?;
+			let lang = match language {
+				Some(l) => l.parse::<Language>()?,
+				None => {
+					// If no language provided, trigger interactive selection
+					sticks::interactive::select_language()
+				}
+			};
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			sticks::init_project_with_system(lang, build_system)?;
 		}
@@ -117,6 +146,29 @@ fn run() -> Result<()> {
 	}
 
 	Ok(())
+}
+
+/// Convert shorthand commands to full command names
+fn handle_shortcuts(args: Vec<String>) -> Vec<String> {
+	if args.len() < 2 {
+		return args;
+	}
+
+	let mut new_args = vec![args[0].clone()];
+	let first_arg = &args[1];
+
+	let expanded = match first_arg.as_str() {
+		"i" => "init",
+		"s" => "src",
+		"a" => "add",
+		"r" => "remove",
+		"u" => "update",
+		_ => return args, // Not a shortcut
+	};
+
+	new_args.push(expanded.to_string());
+	new_args.extend_from_slice(&args[2..]);
+	new_args
 }
 
 fn validate_project_names(names: &[String]) -> Result<()> {

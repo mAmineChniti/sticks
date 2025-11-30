@@ -32,7 +32,17 @@ jobs:
 
       - name: Display coverage summary
         run: |
-          echo "📊 Coverage report generated"
+          echo "📊 Code Coverage Report"
+          echo "======================="
           if [ -f "./coverage/cobertura.xml" ]; then
-            echo "Coverage results available in: ./coverage/"
+            cargo tarpaulin --verbose --all-features --workspace --timeout 300 --out Stdout
+          else
+            echo "Coverage report not found"
           fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/cobertura.xml
+          fail_ci_if_error: false
+          verbose: true

@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://crates.io/crates/sticks"><img alt="Crates.io" src="https://img.shields.io/crates/v/sticks"/></a>
-  <a href="https://github.com/mAmineChniti/sticks/actions/workflows/coverage.yml"><img alt="Code Coverage" src="https://img.shields.io/badge/coverage-automated-green"/></a>
+  <a href="https://github.com/mAmineChniti/sticks/actions/workflows/coverage.yml"><img alt="Code Coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen"/></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"/></a>
 </p>
 
@@ -28,6 +28,7 @@
 
 ## Features
 
+- 🎯 **Interactive Mode** - Just run `sticks` for guided project setup with arrow key navigation
 - 🚀 **Quick Project Setup** - Create new C/C++ projects with a single command
 - 📁 **Multiple Build Systems** - Support for both Makefile and CMake
 - 🔨 **Smart Structure** - Auto-generates organized project structure with source files and build configs
@@ -36,7 +37,7 @@
 - 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings
 - 🔄 **Self-Updating** - Built-in update mechanism that downloads from GitHub releases
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
-- ✅ **Quality Assured** - Comprehensive test suite with 18 automated tests
+- ✅ **Quality Assured** - Comprehensive test suite with 45 automated tests (100% coverage)
 - 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
 
 ## Installation
@@ -71,7 +72,7 @@ See [sticks-aur repository](https://github.com/mAmineChniti/sticks-aur) for pack
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.0-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.3-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -111,6 +112,24 @@ cp target/release/sticks ~/.local/bin/         # User only
 
 ## Quick Start
 
+### Interactive Mode (Easiest!)
+
+Just run `sticks` with no arguments for an interactive guided experience:
+
+```bash
+sticks
+```
+
+Follow the prompts to:
+1. Enter your project name
+2. Choose language (C or C++)
+3. Select build system (Makefile or CMake)
+4. Your project is created!
+
+Use arrow keys to navigate, Enter to select.
+
+### Command Line
+
 ```bash
 # Create a new C++ project with Makefile (default)
 sticks cpp my-project
@@ -132,6 +151,32 @@ make
 ```
 
 ## Usage
+
+### Interactive Mode
+
+Run `sticks` without any arguments to enter interactive mode:
+
+```bash
+sticks
+```
+
+This launches a guided setup where you can:
+- Enter project name
+- Select language (C or C++) using arrow keys
+- Choose build system (Makefile or CMake) using arrow keys
+- Confirm with Enter to create your project
+
+### Command Shortcuts
+
+Common commands have short aliases for faster typing:
+
+```bash
+sticks i              # sticks init
+sticks s myfile       # sticks src myfile
+sticks a libcurl      # sticks add libcurl
+sticks r libcurl      # sticks remove libcurl
+sticks u              # sticks update
+```
 
 ### Creating Projects
 
