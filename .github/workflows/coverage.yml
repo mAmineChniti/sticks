@@ -1,0 +1,38 @@
+name: Code Coverage
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage:
+    name: Code Coverage Report
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          components: llvm-tools-preview
+
+      - name: Install tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Generate coverage report
+        run: cargo tarpaulin --verbose --all-features --workspace --timeout 300 --out Xml --output-dir coverage
+
+      - name: Display coverage summary
+        run: |
+          echo "📊 Coverage report generated"
+          if [ -f "./coverage/cobertura.xml" ]; then
+            echo "Coverage results available in: ./coverage/"
+          fi
