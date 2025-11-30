@@ -172,7 +172,6 @@ jobs:
           git add PKGBUILD
           if ! git diff --cached --quiet; then
             git commit -m "chore: update PKGBUILD to v${{ needs.check-version.outputs.version }}"
-            # Use PAT for authentication to sticks-aur repository
             git push "https://x-access-token:${{ secrets.STICKS_PAT }}@github.com/mAmineChniti/sticks-aur.git" HEAD:master
             echo "PKGBUILD updated and pushed to sticks-aur repository"
           else
