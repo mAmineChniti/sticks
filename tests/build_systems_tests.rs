@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use sticks::{BuildSystem, BuildSystemGenerator, CMakeGenerator, Language, MakefileGenerator};
 
 #[test]
