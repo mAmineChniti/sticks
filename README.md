@@ -10,6 +10,12 @@
 </p>
 
 <p align="center">
+  <a href="https://crates.io/crates/sticks"><img alt="Crates.io" src="https://img.shields.io/crates/v/sticks"/></a>
+  <a href="https://github.com/mAmineChniti/sticks/actions/workflows/coverage.yml"><img alt="Code Coverage" src="https://img.shields.io/badge/coverage-automated-green"/></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"/></a>
+</p>
+
+<p align="center">
   <a href="#features">Features</a> •
   <a href="#installation">Installation</a> •
   <a href="#quick-start">Quick Start</a> •
@@ -310,7 +316,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 - [ ] Template system for custom project structures
 - [ ] Package manager integration (conan, vcpkg)
 - [ ] Plugin system for extending functionality
-- [ ] Code coverage reporting
+- [X] Code coverage reporting
 
 ## License
 

@@ -24,7 +24,7 @@ path="src/main.rs"
 [package.metadata.deb]
 name = "sticks"
 maintainer = "mAmineChniti <emin.chniti@esprit.tn>"
-copyright = "2023-2025 mAmineChniti/TVC <emin.chniti@esprit.tn>"
+copyright = "2023-2025 mAmineChniti <emin.chniti@esprit.tn>"
 license-file = ["LICENSE", "0"]
 depends = "$auto, gcc"
 extended-description = """\
