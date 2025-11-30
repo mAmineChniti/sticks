@@ -46,8 +46,7 @@ Choose the installation method that works best for you:
 
 ### 📦 Package Managers (Recommended)
 
-<details>
-<summary><b>Arch Linux (AUR)</b></summary>
+#### Arch Linux (AUR)
 
 **Package Name:** `sticks-aur`
 
@@ -63,20 +62,15 @@ cd sticks-aur
 makepkg -si
 ```
 
-See [sticks-aur repository](https://github.com/mAmineChniti/sticks-aur) for packaging details.
+See [sticks-aur repository](https://aur.archlinux.org/packages/sticks-aur) for packaging details.
 
-</details>
-
-<details>
-<summary><b>Debian/Ubuntu</b></summary>
+#### Debian/Ubuntu
 
 ```bash
 # Download the latest .deb package
 wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.3-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
-
-</details>
 
 ### 🚀 Pre-built Binaries
 
@@ -98,7 +92,7 @@ Requires Rust toolchain from [rustup.rs](https://rustup.rs/).
 
 ```bash
 # Clone the repository
-git clone --recurse-submodules https://github.com/mAmineChniti/sticks.git
+git clone https://github.com/mAmineChniti/sticks.git
 cd sticks
 
 # Build release binary
