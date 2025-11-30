@@ -97,7 +97,7 @@ fn run() -> Result<()> {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				sticks::create_project_with_system(&name, Language::C, build_system)?;
+				sticks::new_project_with_system(&name, Language::C, build_system)?;
 			}
 		}
 		Commands::Cpp {
@@ -107,7 +107,7 @@ fn run() -> Result<()> {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				sticks::create_project_with_system(&name, Language::Cpp, build_system)?;
+				sticks::new_project_with_system(&name, Language::Cpp, build_system)?;
 			}
 		}
 		Commands::Init { language, build } => {

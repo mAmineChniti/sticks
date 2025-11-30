@@ -5,7 +5,6 @@ use std::io::{self, Read, Write};
 pub fn run_interactive() -> Result<()> {
 	println!("\n🎯 Welcome to sticks - Interactive Mode\n");
 
-	// Step 1: Get project name
 	print!("📝 Enter project name: ");
 	io::stdout().flush()?;
 	let mut project_name = String::new();
@@ -16,17 +15,11 @@ pub fn run_interactive() -> Result<()> {
 		anyhow::bail!("Project name cannot be empty");
 	}
 
-	// Step 2: Select language
-	println!();
 	let language = select_language_interactive()?;
-
-	// Step 3: Select build system
-	println!();
 	let build_system = select_build_system_interactive()?;
 
-	// Step 4: Create project
 	println!("\n🔨 Creating {} project: {}", language, project_name);
-	crate::create_project_with_system(&project_name, language, build_system)?;
+	crate::new_project_with_system(&project_name, language, build_system)?;
 	println!("✅ Project created successfully!\n");
 
 	Ok(())
@@ -34,7 +27,6 @@ pub fn run_interactive() -> Result<()> {
 
 /// Interactive language selector with arrow keys and enter
 pub fn select_language_interactive() -> Result<Language> {
-	println!("Choose language:");
 	let options = vec!["C", "C++"];
 	let selected = interactive_select(&options)?;
 
@@ -47,7 +39,6 @@ pub fn select_language_interactive() -> Result<Language> {
 
 /// Interactive build system selector with arrow keys and enter
 pub fn select_build_system_interactive() -> Result<BuildSystem> {
-	println!("Choose build system:");
 	let options = vec!["Makefile", "CMake"];
 	let selected = interactive_select(&options)?;
 
@@ -63,21 +54,17 @@ fn interactive_select(options: &[&str]) -> Result<usize> {
 	let mut selected = 0;
 	let num_options = options.len();
 
-	// Enable raw mode
 	let _guard = RawModeGuard::new()?;
 
-	// Initial display
 	display_options(options, selected)?;
 
 	loop {
-		// Read input
 		let input = read_key()?;
 
 		match input.as_str() {
 			"UP" => {
 				if selected > 0 {
 					selected -= 1;
-					// Move cursor up and redraw
 					move_cursor_up(num_options)?;
 					display_options(options, selected)?;
 				}
@@ -85,15 +72,13 @@ fn interactive_select(options: &[&str]) -> Result<usize> {
 			"DOWN" => {
 				if selected < num_options - 1 {
 					selected += 1;
-					// Move cursor up and redraw
 					move_cursor_up(num_options)?;
 					display_options(options, selected)?;
 				}
 			}
 			"ENTER" => {
-				// Move cursor to end of list
-				print!("\n");
-				io::stdout().flush()?;
+				move_cursor_up(num_options)?;
+				println!("❯ {}", options[selected]);
 				break;
 			}
 			_ => {}
@@ -123,7 +108,6 @@ fn move_cursor_up(lines: usize) -> Result<()> {
 	Ok(())
 }
 
-/// RAII guard to manage raw mode
 struct RawModeGuard {
 	original_termios: libc::termios,
 }
@@ -163,18 +147,15 @@ impl Drop for RawModeGuard {
 	}
 }
 
-/// Read a single key press (handles arrow keys)
 fn read_key() -> Result<String> {
 	let mut buf = [0; 3];
 
-	// Set non-blocking read with timeout
 	let n = io::stdin().read(&mut buf)?;
 
 	if n == 0 {
 		return Ok(String::new());
 	}
 
-	// Check for escape sequence (arrow keys)
 	if n >= 3 && buf[0] == 27 && buf[1] == 91 {
 		match buf[2] {
 			b'A' => return Ok("UP".to_string()),
@@ -183,7 +164,6 @@ fn read_key() -> Result<String> {
 		}
 	}
 
-	// Check for Enter key
 	if buf[0] == b'\n' || buf[0] == b'\r' {
 		return Ok("ENTER".to_string());
 	}

@@ -1,6 +1,6 @@
-# ine
+# k
 
-A C++ project created with [sticks](https://github.com/mAmineChniti/sticks).
+A C project created with [sticks](https://github.com/mAmineChniti/sticks).
 
 ## Building
 
@@ -26,7 +26,7 @@ make debug
 ## Project Structure
 
 ```
-ine/
+k/
 ├── src/              # Source files
 ├── include/          # Header files (if applicable)
 ├── build/            # Build artifacts (generated)
