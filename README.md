@@ -37,7 +37,7 @@
 - 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings
 - 🔄 **Self-Updating** - Built-in update mechanism that downloads from GitHub releases
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
-- ✅ **Quality Assured** - Comprehensive test suite with 39 automated tests (100% coverage)
+- ✅ **Quality Assured** - Comprehensive test suite with 45 automated tests (100% coverage)
 - 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
 
 ## Installation
