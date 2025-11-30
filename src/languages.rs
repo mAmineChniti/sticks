@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 
 pub trait LanguageConsts {
@@ -120,3 +122,31 @@ impl FromStr for Language {
 		}
 	}
 }
+
+impl Language {
+	/// Detect language from existing project structure
+	pub fn from_project_structure() -> Result<Language, anyhow::Error> {
+		// Check src directory for source files
+		if Path::new("src").exists() {
+			let entries = fs::read_dir("src").context("Failed to read src directory")?;
+
+			for entry in entries {
+				let entry = entry.context("Failed to read directory entry")?;
+				let path = entry.path();
+
+				if let Some(ext) = path.extension() {
+					match ext.to_str() {
+						Some("cpp") | Some("cc") | Some("cxx") => return Ok(Language::Cpp),
+						Some("c") => return Ok(Language::C),
+						_ => continue,
+					}
+				}
+			}
+		}
+
+		// Default to C
+		Ok(Language::C)
+	}
+}
+
+use anyhow::Context;

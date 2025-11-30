@@ -30,14 +30,17 @@
 
 - 🎯 **Interactive Mode** - Just run `sticks` for guided project setup with arrow key navigation
 - 🚀 **Quick Project Setup** - Create new C/C++ projects with a single command
-- 📁 **Multiple Build Systems** - Support for both Makefile and CMake
+- 📁 **Multiple Build Systems** - Support for both Makefile and CMake with automatic conversion
 - 🔨 **Smart Structure** - Auto-generates organized project structure with source files and build configs
 - 📦 **Dependency Management** - Easily add/remove dependencies in your Makefile
 - 🔧 **Multi-Source Support** - Add multiple source files with automatic build integration
 - 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings
 - 🔄 **Self-Updating** - Built-in update mechanism that downloads from GitHub releases
+- 📦 **Package Manager Integration** - Support for Conan and vcpkg for dependency management
+- 🔧 **Modular Features** - Add/remove build systems and package managers to existing projects post-creation
+- ⚡ **Command Aliases** - Short aliases for faster typing (f, add-pm, rm-pm, etc.)
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
-- ✅ **Quality Assured** - Comprehensive test suite with 45 automated tests (100% coverage)
+- ✅ **Quality Assured** - Comprehensive test suite with 64 automated tests (100% coverage)
 - 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
 
 ## Installation
@@ -68,7 +71,7 @@ See [sticks-aur repository](https://aur.archlinux.org/packages/sticks-aur) for p
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.3-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.4-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -170,9 +173,21 @@ sticks s myfile       # sticks src myfile
 sticks a libcurl      # sticks add libcurl
 sticks r libcurl      # sticks remove libcurl
 sticks u              # sticks update
+sticks f              # sticks feature
 ```
 
-### Creating Projects
+#### Feature Subcommand Aliases
+
+Feature management also supports shortcuts:
+
+```bash
+sticks f list                     # List project features
+sticks f add-pm conan --project myapp   # Add Conan (shortcut for add-package-manager)
+sticks f rm-pm vcpkg                    # Remove vcpkg (shortcut for remove-package-manager)
+sticks f convert --to cmake      # Convert build system
+```
+
+## Getting Started
 
 **Create a new project in a subdirectory:**
 
@@ -186,6 +201,13 @@ sticks cpp my-cpp-project   # New C++ project with Makefile
 ```bash
 sticks c my-project --build cmake       # C project with CMake
 sticks cpp my-project --build cmake     # C++ project with CMake
+```
+
+**Create with package manager integration:**
+
+```bash
+sticks cpp my-project --build cmake --package-manager conan      # C++ with CMake and Conan
+sticks c my-project --build cmake -p vcpkg                       # C with CMake and vcpkg
 ```
 
 **Initialize in current directory:**
@@ -228,6 +250,134 @@ Sticks will:
 - Create corresponding headers
 - Update build file (Makefile or CMakeLists.txt) automatically
 
+### Package Manager Integration
+
+Sticks supports C/C++ package managers for dependency management:
+
+#### Conan
+
+Create a project with Conan dependency management:
+
+```bash
+sticks cpp my-project --build cmake --package-manager conan
+cd my-project
+```
+
+This generates a `conanfile.txt`. To add dependencies:
+
+1. Edit `conanfile.txt` and add packages to the `[requires]` section:
+   ```
+   [requires]
+   libcurl/7.85.0
+   openssl/1.1.1q
+   ```
+
+2. Install dependencies: `conan install . --build=missing`
+
+#### vcpkg
+
+Create a project with vcpkg:
+
+```bash
+sticks cpp my-project --build cmake --package-manager vcpkg
+# or using short flag
+sticks cpp my-project --build cmake -p vcpkg
+cd my-project
+```
+
+This generates a `vcpkg.json`. To add dependencies:
+
+1. Edit `vcpkg.json` and add packages to the `"dependencies"` array:
+   ```json
+   "dependencies": [
+     "libcurl",
+     "openssl"
+   ]
+   ```
+
+2. Install: `./vcpkg/vcpkg install`
+3. CMakeLists.txt is pre-configured to use vcpkg toolchain
+
+## Enhancing Existing Projects
+
+After creating a project, you can add or modify features using the `sticks feature` (or `sticks f` for short) command:
+
+### View Project Features
+
+List all detected features and configurations:
+
+```bash
+sticks f list
+```
+
+Output shows:
+- Current build system (Makefile or CMake)
+- Configured package managers
+- Configuration files status
+
+### Convert Build System
+
+Change between Makefile and CMake:
+
+```bash
+# Convert Makefile project to CMake
+sticks f convert cmake
+
+# Convert CMake project to Makefile
+sticks f convert makefile
+
+# Optionally specify project name (auto-detected if omitted)
+sticks f convert cmake my_project
+```
+
+This will:
+- Remove old build system file
+- Generate new configuration with your source files
+- Maintain project structure
+
+### Add Package Manager
+
+Add Conan or vcpkg to an existing project:
+
+```bash
+# Add Conan to current project
+sticks f add-pm conan
+
+# Add vcpkg
+sticks f add-pm vcpkg
+
+# Specify project name if needed
+sticks f add-pm conan my_project
+```
+
+### Remove Package Manager
+
+Remove a package manager if you no longer need it:
+
+```bash
+sticks f rm-pm conan
+sticks f rm-pm vcpkg
+```
+
+### Example Workflow
+
+Start with a bare Makefile project, then enhance it:
+
+```bash
+# Create basic C project with Makefile
+sticks c my_app
+cd my_app
+
+# Later, add CMake support
+sticks f convert cmake
+
+# Then add Conan for dependencies
+sticks f add-pm conan
+
+# View all features
+sticks f list
+```
+
 ### Generated Configuration Files
 
 When you create a project, Sticks automatically generates:
@@ -269,7 +419,7 @@ yay -Syu sticks-aur
 paru -Syu sticks-aur
 
 # Debian/Ubuntu (download new .deb)
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.0-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.4-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 
 # Cargo installation
@@ -351,10 +501,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 - [X] Auto-generated .gitignore, .editorconfig, .clang-format
 - [X] VSCode integration (settings, launch config, tasks)
 - [X] Auto-generated README templates
-- [ ] Integration tests for end-to-end workflows
+- [X] Integration tests for end-to-end workflows
 - [ ] Template system for custom project structures
-- [ ] Package manager integration (conan, vcpkg)
-- [ ] Plugin system for extending functionality
+- [X] Package manager integration (conan, vcpkg)
 - [X] Code coverage reporting
 
 ## License
@@ -366,7 +515,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 **Maintainer:** mAmineChniti  
 **Email:** [emin.chniti@esprit.tn](mailto:emin.chniti@esprit.tn)  
 **Repository:** [github.com/mAmineChniti/sticks](https://github.com/mAmineChniti/sticks)  
-**AUR Package:** [github.com/mAmineChniti/sticks-aur](https://github.com/mAmineChniti/sticks-aur)
+**AUR Package:** [aur.archlinux.org/packages/sticks-aur](https://aur.archlinux.org/packages/sticks-aur)
 
 ---
 

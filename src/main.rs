@@ -24,6 +24,8 @@ enum Commands {
 			help = "Build system: 'makefile' or 'cmake'"
 		)]
 		build: String,
+		#[arg(long, short = 'p', help = "Package manager: 'conan' or 'vcpkg'")]
+		package_manager: Option<String>,
 	},
 	#[command(about = "Create a new C++ project in a subdirectory")]
 	Cpp {
@@ -35,6 +37,8 @@ enum Commands {
 			help = "Build system: 'makefile' or 'cmake'"
 		)]
 		build: String,
+		#[arg(long, short = 'p', help = "Package manager: 'conan' or 'vcpkg'")]
+		package_manager: Option<String>,
 	},
 	#[command(about = "Initialize a project in the current directory")]
 	#[command(visible_alias = "i")]
@@ -48,6 +52,8 @@ enum Commands {
 			help = "Build system: 'makefile' or 'cmake'"
 		)]
 		build: String,
+		#[arg(long, short = 'p', help = "Package manager: 'conan' or 'vcpkg'")]
+		package_manager: Option<String>,
 	},
 	#[command(about = "Add dependencies to your project's Makefile")]
 	#[command(visible_alias = "a")]
@@ -61,6 +67,39 @@ enum Commands {
 	#[command(about = "Update sticks to the latest version")]
 	#[command(visible_alias = "u")]
 	Update,
+	#[command(about = "Manage project features (build system, package managers)")]
+	#[command(visible_alias = "f")]
+	Feature {
+		#[command(subcommand)]
+		action: FeatureAction,
+	},
+}
+
+#[derive(Subcommand)]
+enum FeatureAction {
+	#[command(about = "List detected project features")]
+	List,
+	#[command(about = "Convert between build systems (makefile <-> cmake)")]
+	Convert {
+		#[arg(value_parser = ["makefile", "cmake"])]
+		to_system: String,
+		#[arg(help = "Project name (auto-detected from current directory if not provided)")]
+		project_name: Option<String>,
+	},
+	#[command(about = "Add a package manager to the project")]
+	#[command(visible_alias = "add-pm")]
+	AddPackageManager {
+		#[arg(value_parser = ["conan", "vcpkg"])]
+		package_manager: String,
+		#[arg(help = "Project name (auto-detected if not provided)")]
+		project_name: Option<String>,
+	},
+	#[command(about = "Remove a package manager from the project")]
+	#[command(visible_alias = "rm-pm")]
+	RemovePackageManager {
+		#[arg(value_parser = ["conan", "vcpkg"])]
+		package_manager: String,
+	},
 }
 
 fn main() {
@@ -93,24 +132,56 @@ fn run() -> Result<()> {
 		Commands::C {
 			project_name,
 			build,
+			package_manager,
 		} => {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				sticks::new_project_with_system(&name, Language::C, build_system)?;
+				match package_manager {
+					Some(ref pm_str) => {
+						let pm = pm_str.parse::<sticks::PackageManager>()?;
+						sticks::create_project_with_system_and_pm(
+							&name,
+							Language::C,
+							build_system,
+							pm,
+						)?;
+					}
+					None => {
+						sticks::new_project_with_system(&name, Language::C, build_system)?;
+					}
+				}
 			}
 		}
 		Commands::Cpp {
 			project_name,
 			build,
+			package_manager,
 		} => {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			for name in project_name {
-				sticks::new_project_with_system(&name, Language::Cpp, build_system)?;
+				match package_manager {
+					Some(ref pm_str) => {
+						let pm = pm_str.parse::<sticks::PackageManager>()?;
+						sticks::create_project_with_system_and_pm(
+							&name,
+							Language::Cpp,
+							build_system,
+							pm,
+						)?;
+					}
+					None => {
+						sticks::new_project_with_system(&name, Language::Cpp, build_system)?;
+					}
+				}
 			}
 		}
-		Commands::Init { language, build } => {
+		Commands::Init {
+			language,
+			build,
+			package_manager,
+		} => {
 			let lang = match language {
 				Some(l) => l.parse::<Language>()?,
 				None => {
@@ -119,7 +190,15 @@ fn run() -> Result<()> {
 				}
 			};
 			let build_system = build.parse::<sticks::BuildSystem>()?;
-			sticks::init_project_with_system(lang, build_system)?;
+			match package_manager {
+				Some(pm_str) => {
+					let pm = pm_str.parse::<sticks::PackageManager>()?;
+					sticks::init_project_with_system_and_pm(lang, build_system, pm)?;
+				}
+				None => {
+					sticks::init_project_with_system(lang, build_system)?;
+				}
+			}
 		}
 		Commands::Add { dependency_name } => {
 			if dependency_name.is_empty() {
@@ -142,6 +221,57 @@ fn run() -> Result<()> {
 		}
 		Commands::Update => {
 			update_project()?;
+		}
+		Commands::Feature { action } => {
+			handle_feature_action(action)?;
+		}
+	}
+
+	Ok(())
+}
+
+fn handle_feature_action(action: FeatureAction) -> Result<()> {
+	use FeatureAction::*;
+
+	match action {
+		List => {
+			sticks::list_features()?;
+		}
+		Convert {
+			to_system,
+			project_name,
+		} => {
+			let current_system = sticks::detect_build_system()?.ok_or_else(|| {
+				anyhow::anyhow!("No build system detected in current project. Cannot convert.")
+			})?;
+
+			let target_system = to_system.parse::<sticks::BuildSystem>()?;
+			let proj_name = project_name.unwrap_or_else(|| {
+				std::env::current_dir()
+					.ok()
+					.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+					.unwrap_or_else(|| "project".to_string())
+			});
+
+			sticks::convert_build_system(current_system, target_system, &proj_name)?;
+		}
+		AddPackageManager {
+			package_manager,
+			project_name,
+		} => {
+			let pm = package_manager.parse::<sticks::PackageManager>()?;
+			let proj_name = project_name.unwrap_or_else(|| {
+				std::env::current_dir()
+					.ok()
+					.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+					.unwrap_or_else(|| "project".to_string())
+			});
+
+			sticks::add_package_manager_to_project(pm, &proj_name)?;
+		}
+		RemovePackageManager { package_manager } => {
+			let pm = package_manager.parse::<sticks::PackageManager>()?;
+			sticks::remove_package_manager_from_project(pm)?;
 		}
 	}
 
