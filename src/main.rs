@@ -102,6 +102,16 @@ enum FeatureAction {
 	},
 }
 
+/// Program entry point that runs the CLI and terminates the process on failure.
+///
+/// If `run()` returns an error, prints the error (formatted with detail) to standard error
+/// and exits the process with status code 1.
+///
+/// # Examples
+///
+/// ```no_run
+/// main();
+/// ```
 fn main() {
 	if let Err(e) = run() {
 		eprintln!("Error: {:#}", e);
@@ -109,6 +119,28 @@ fn main() {
 	}
 }
 
+/// Parse command-line arguments and execute the selected CLI command.
+///
+/// This function reads program arguments, expands any single-letter shortcuts,
+/// parses the CLI, and dispatches the requested command (project creation,
+/// initialization, dependency/source management, update, or feature actions).
+/// When invoked with no arguments or when no subcommand is provided, it runs
+/// the interactive flow.
+///
+/// # Returns
+///
+/// `Ok(())` on success, or an `Err` describing the failure.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Typical invocation from main:
+/// # use anyhow::Result;
+/// # fn main() -> Result<()> {
+/// run()?;
+/// # Ok(())
+/// # }
+/// ```
 fn run() -> Result<()> {
 	let args: Vec<String> = env::args().collect();
 
@@ -230,6 +262,26 @@ fn run() -> Result<()> {
 	Ok(())
 }
 
+/// Execute a feature management action such as listing detected features, converting the build system, or adding/removing a package manager.
+///
+/// The behavior depends on `action`:
+/// - `List`: lists detected project features.
+/// - `Convert { to_system, project_name }`: requires a detected current build system (returns an error if none), parses `to_system`, and uses `project_name` or the current directory name (falls back to `"project"`) as the project identifier before converting.
+/// - `AddPackageManager { package_manager, project_name }`: parses `package_manager` and uses `project_name` or the current directory name (falls back to `"project"`) when adding the package manager to the project.
+/// - `RemovePackageManager { package_manager }`: parses `package_manager` and removes it from the project.
+///
+/// Returns `Ok(())` on success, or an `Err` if parsing, detection, or the underlying operation fails.
+///
+/// # Examples
+///
+/// ```
+/// # use anyhow::Result;
+/// # use crate::FeatureAction;
+/// # fn try_example() -> Result<()> {
+/// handle_feature_action(FeatureAction::List)?;
+/// # Ok(())
+/// # }
+/// ```
 fn handle_feature_action(action: FeatureAction) -> Result<()> {
 	use FeatureAction::*;
 

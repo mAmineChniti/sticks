@@ -35,6 +35,24 @@ fn test_package_manager_equality() {
 	assert_ne!(PackageManager::Conan, PackageManager::Vcpkg);
 }
 
+/// Verifies the Conan package manager generator produces the expected name, file extension, and manifest sections.
+///
+/// Asserts that the generator for `PackageManager::Conan` reports the name "Conan" and extension "conanfile.txt", and that a manifest generated for "test_project" contains the sections `[requires]`, `[generators]`, `CMakeDeps`, `CMakeToolchain`, and `[options]`.
+///
+/// # Examples
+///
+/// ```
+/// let generator = get_package_manager_generator(PackageManager::Conan);
+/// assert_eq!(generator.name(), "Conan");
+/// assert_eq!(generator.extension(), "conanfile.txt");
+///
+/// let manifest = generator.generate_manifest("test_project");
+/// assert!(manifest.contains("[requires]"));
+/// assert!(manifest.contains("[generators]"));
+/// assert!(manifest.contains("CMakeDeps"));
+/// assert!(manifest.contains("CMakeToolchain"));
+/// assert!(manifest.contains("[options]"));
+/// ```
 #[test]
 fn test_conan_generator() {
 	let generator = get_package_manager_generator(PackageManager::Conan);

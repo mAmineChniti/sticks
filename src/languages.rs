@@ -114,6 +114,23 @@ impl LanguageConsts for Language {
 impl FromStr for Language {
 	type Err = anyhow::Error;
 
+	/// Parses a language name from a string.
+	///
+	/// Accepts "c" or "cpp" (case-insensitive) and returns the corresponding `Language`.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use crate::languages::Language;
+	/// use std::str::FromStr;
+	///
+	/// assert_eq!(Language::from_str("c").unwrap(), Language::C);
+	/// assert_eq!(Language::from_str("CPP").unwrap(), Language::Cpp);
+	/// ```
+	///
+	/// # Errors
+	///
+	/// Returns an error with message `Unsupported language: {input}. Use 'c' or 'cpp'` for unsupported inputs.
 	fn from_str(input: &str) -> Result<Language, Self::Err> {
 		match input.to_lowercase().as_str() {
 			"c" => Ok(Language::C),
@@ -124,7 +141,21 @@ impl FromStr for Language {
 }
 
 impl Language {
-	/// Detect language from existing project structure
+	/// Detects the project's programming language by inspecting files in the `src` directory.
+	///
+	/// Checks file extensions of entries in `src`: `cpp`, `cc`, or `cxx` map to `Language::Cpp`; `c` maps to `Language::C`.
+	/// If no recognizable source files are found, the function defaults to `Language::C`.
+	/// Returns an error if reading the `src` directory or its entries fails (propagated with context).
+	///
+	/// # Examples
+	///
+	/// ```
+	/// let lang = crate::languages::Language::from_project_structure().unwrap();
+	/// match lang {
+	///     crate::languages::Language::C => println!("Detected C"),
+	///     crate::languages::Language::Cpp => println!("Detected C++"),
+	/// }
+	/// ```
 	pub fn from_project_structure() -> Result<Language, anyhow::Error> {
 		// Check src directory for source files
 		if Path::new("src").exists() {
