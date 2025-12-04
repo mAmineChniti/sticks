@@ -15,6 +15,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
 	#[command(about = "Create a new C project in a subdirectory")]
+	#[command(after_help = "Examples:\n  sticks c myproject            # Create C project with Makefile\n  sticks c myproject --build cmake  # Create C project with CMake\n  sticks c myproject -p conan   # Create C project with Conan support")]
 	C {
 		project_name: Vec<String>,
 		#[arg(
@@ -28,6 +29,7 @@ enum Commands {
 		package_manager: Option<String>,
 	},
 	#[command(about = "Create a new C++ project in a subdirectory")]
+	#[command(after_help = "Examples:\n  sticks cpp myproject          # Create C++ project with Makefile\n  sticks cpp myproject --build cmake  # Create C++ project with CMake\n  sticks cpp myproject -p vcpkg # Create C++ project with vcpkg support")]
 	Cpp {
 		project_name: Vec<String>,
 		#[arg(
@@ -41,6 +43,7 @@ enum Commands {
 		package_manager: Option<String>,
 	},
 	#[command(about = "Initialize a project in the current directory")]
+	#[command(after_help = "Examples:\n  sticks init c                 # Initialize C project\n  sticks i cpp --build cmake    # Initialize C++ project with CMake\n  sticks i c -p conan           # Initialize C project with Conan support")]
 	#[command(visible_alias = "i")]
 	Init {
 		#[arg(value_parser = ["c", "cpp"])]
@@ -56,18 +59,22 @@ enum Commands {
 		package_manager: Option<String>,
 	},
 	#[command(about = "Add dependencies to your project's Makefile")]
+	#[command(after_help = "Examples:\n  sticks add libcurl            # Add single dependency\n  sticks a libcurl openssl      # Add multiple dependencies\n  sticks add sqlite3 pthread    # Add libraries for C project")]
 	#[command(visible_alias = "a")]
 	Add { dependency_name: Vec<String> },
 	#[command(about = "Remove dependencies from your project's Makefile")]
+	#[command(after_help = "Examples:\n  sticks remove libcurl         # Remove single dependency\n  sticks r libcurl openssl      # Remove multiple dependencies\n  sticks remove sqlite3         # Remove library from project")]
 	#[command(visible_alias = "r")]
 	Remove { dependency_name: Vec<String> },
 	#[command(about = "Add new source files to your project")]
+	#[command(after_help = "Examples:\n  sticks src utils              # Add utils.c/.cpp\n  sticks s math parser          # Add multiple source files\n  sticks src database           # Add database.c/.cpp")]
 	#[command(visible_alias = "s")]
 	Src { source_names: Vec<String> },
 	#[command(about = "Update sticks to the latest version")]
 	#[command(visible_alias = "u")]
 	Update,
 	#[command(about = "Manage project features (build system, package managers)")]
+	#[command(after_help = "Examples:\n  sticks feature list           # List current project features\n  sticks f convert cmake        # Convert to CMake build system\n  sticks f add-pm conan myapp   # Add Conan package manager\n  sticks f rm-pm vcpkg          # Remove vcpkg package manager")]
 	#[command(visible_alias = "f")]
 	Feature {
 		#[command(subcommand)]
@@ -80,6 +87,7 @@ enum FeatureAction {
 	#[command(about = "List detected project features")]
 	List,
 	#[command(about = "Convert between build systems (makefile <-> cmake)")]
+	#[command(after_help = "Examples:\n  sticks f convert cmake        # Convert current project to CMake\n  sticks f convert makefile     # Convert current project to Makefile\n  sticks f convert cmake myapp  # Convert specific project to CMake")]
 	Convert {
 		#[arg(value_parser = ["makefile", "cmake"])]
 		to_system: String,
@@ -87,6 +95,7 @@ enum FeatureAction {
 		project_name: Option<String>,
 	},
 	#[command(about = "Add a package manager to the project")]
+	#[command(after_help = "Examples:\n  sticks f add-pm conan         # Add Conan to current project\n  sticks f add-pm vcpkg         # Add vcpkg to current project\n  sticks f add-pm conan myapp   # Add Conan to specific project")]
 	#[command(visible_alias = "add-pm")]
 	AddPackageManager {
 		#[arg(value_parser = ["conan", "vcpkg"])]
@@ -95,6 +104,7 @@ enum FeatureAction {
 		project_name: Option<String>,
 	},
 	#[command(about = "Remove a package manager from the project")]
+	#[command(after_help = "Examples:\n  sticks f rm-pm conan          # Remove Conan from current project\n  sticks f rm-pm vcpkg          # Remove vcpkg from current project")]
 	#[command(visible_alias = "rm-pm")]
 	RemovePackageManager {
 		#[arg(value_parser = ["conan", "vcpkg"])]
@@ -247,7 +257,7 @@ fn handle_feature_action(action: FeatureAction) -> Result<()> {
 					.unwrap_or_else(|| "project".to_string())
 			});
 
-			sticks::convert_build_system(current_system, target_system, &proj_name)?;
+			sticks::convert_build_system_interactive(current_system, target_system, &proj_name)?;
 		}
 		AddPackageManager {
 			package_manager,
