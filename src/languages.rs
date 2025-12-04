@@ -1,3 +1,6 @@
+use anyhow::Context;
+use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 
 pub trait LanguageConsts {
@@ -117,6 +120,68 @@ impl FromStr for Language {
 			"c" => Ok(Language::C),
 			"cpp" => Ok(Language::Cpp),
 			_ => anyhow::bail!("Unsupported language: {}. Use 'c' or 'cpp'", input),
+		}
+	}
+}
+
+impl Language {
+	pub fn from_project_structure() -> Result<Language, anyhow::Error> {
+		Self::from_project_structure_with_prompt(true)
+	}
+
+	pub fn from_project_structure_with_prompt(
+		interactive: bool,
+	) -> Result<Language, anyhow::Error> {
+		if Path::new("src").exists() {
+			let entries = fs::read_dir("src").context("Failed to read src directory")?;
+
+			for entry in entries {
+				let entry = entry.context("Failed to read directory entry")?;
+				let path = entry.path();
+
+				if let Some(ext) = path.extension() {
+					match ext.to_str() {
+						Some("cpp") | Some("cc") | Some("cxx") => return Ok(Language::Cpp),
+						Some("c") => return Ok(Language::C),
+						_ => continue,
+					}
+				}
+			}
+		}
+
+		if !interactive {
+			return Ok(Language::C);
+		}
+
+		println!("⚠️  No source files found to detect language.");
+		println!("   Please select the target language:");
+		println!("   [1] C");
+		println!("   [2] C++");
+		print!("   Choice (1-2): ");
+
+		use std::io::{self, Write};
+		io::stdout().flush().unwrap();
+
+		let mut input = String::new();
+		match io::stdin().read_line(&mut input) {
+			Ok(_) => match input.trim() {
+				"1" | "c" | "C" => {
+					println!("✓ Selected C language");
+					Ok(Language::C)
+				}
+				"2" | "cpp" | "C++" | "c++" => {
+					println!("✓ Selected C++ language");
+					Ok(Language::Cpp)
+				}
+				_ => {
+					println!("Invalid choice. Defaulting to C.");
+					Ok(Language::C)
+				}
+			},
+			Err(_) => {
+				println!("Failed to read input. Defaulting to C.");
+				Ok(Language::C)
+			}
 		}
 	}
 }

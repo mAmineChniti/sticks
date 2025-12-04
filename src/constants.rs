@@ -1,14 +1,9 @@
-//! Centralized constants for the sticks project
-//! This module contains all magic strings and configuration values
-
-/// Makefile configuration
 pub mod makefile {
 	pub const FILENAME: &str = "Makefile";
 	pub const INSTALL_DEPS_PREFIX: &str = "sudo apt install -y";
 	pub const DEFAULT_TARGET: &str = "all: clean";
 }
 
-/// GitHub release and versioning
 pub mod github {
 	pub const REPO_OWNER: &str = "mAmineChniti";
 	pub const REPO_NAME: &str = "sticks";
@@ -18,7 +13,6 @@ pub mod github {
 		"https://api.github.com/repos/mAmineChniti/sticks/releases/latest";
 }
 
-/// Project structure
 pub mod project {
 	pub const SRC_DIR: &str = "src";
 	pub const INCLUDE_DIR: &str = "include";
@@ -26,7 +20,6 @@ pub mod project {
 	pub const VSCODE_DIR: &str = ".vscode";
 }
 
-/// File extensions
 pub mod extensions {
 	pub const GITIGNORE: &str = ".gitignore";
 	pub const EDITORCONFIG: &str = ".editorconfig";
@@ -38,7 +31,6 @@ pub mod extensions {
 	pub const VSCODE_TASKS: &str = "tasks.json";
 }
 
-/// Installation paths
 pub mod install_paths {
 	pub const USR_LOCAL_BIN: &str = "/usr/local/bin/sticks";
 	pub const USR_BIN: &str = "/usr/bin/sticks";

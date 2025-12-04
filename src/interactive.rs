@@ -25,7 +25,6 @@ pub fn run_interactive() -> Result<()> {
 	Ok(())
 }
 
-/// Interactive language selector with arrow keys and enter
 pub fn select_language_interactive() -> Result<Language> {
 	let options = vec!["C", "C++"];
 	let selected = interactive_select(&options)?;
@@ -37,7 +36,6 @@ pub fn select_language_interactive() -> Result<Language> {
 	})
 }
 
-/// Interactive build system selector with arrow keys and enter
 pub fn select_build_system_interactive() -> Result<BuildSystem> {
 	let options = vec!["Makefile", "CMake"];
 	let selected = interactive_select(&options)?;
@@ -49,7 +47,6 @@ pub fn select_build_system_interactive() -> Result<BuildSystem> {
 	})
 }
 
-/// Generic interactive selector - shows options and allows arrow keys / enter selection
 fn interactive_select(options: &[&str]) -> Result<usize> {
 	let mut selected = 0;
 	let num_options = options.len();
@@ -171,7 +168,6 @@ fn read_key() -> Result<String> {
 	Ok(String::new())
 }
 
-// Backward compatibility functions for main.rs
 pub fn select_language() -> Language {
 	match select_language_interactive() {
 		Ok(lang) => lang,
