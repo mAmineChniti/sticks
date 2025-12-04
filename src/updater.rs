@@ -55,7 +55,6 @@ fn get_latest_version() -> Result<String> {
 
 	let json = String::from_utf8_lossy(&output.stdout);
 
-
 	if let Some(tag_start) = json.find("\"tag_name\":\"") {
 		let version_str = &json[tag_start + 12..];
 		if let Some(tag_end) = version_str.find('"') {

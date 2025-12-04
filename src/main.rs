@@ -181,10 +181,7 @@ fn run() -> Result<()> {
 		} => {
 			let lang = match language {
 				Some(l) => l.parse::<Language>()?,
-				None => {
-
-					sticks::interactive::select_language()
-				}
+				None => sticks::interactive::select_language(),
 			};
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			match package_manager {

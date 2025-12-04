@@ -47,7 +47,6 @@ pub fn select_build_system_interactive() -> Result<BuildSystem> {
 	})
 }
 
-
 fn interactive_select(options: &[&str]) -> Result<usize> {
 	let mut selected = 0;
 	let num_options = options.len();

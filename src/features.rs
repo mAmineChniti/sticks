@@ -56,7 +56,6 @@ pub fn convert_build_system(from: BuildSystem, to: BuildSystem, project_name: &s
 }
 
 pub fn add_package_manager_to_project(pm: PackageManager, project_name: &str) -> Result<()> {
-
 	if let Ok(Some(existing)) = detect_package_manager() {
 		if existing == pm {
 			anyhow::bail!("Project already uses {}. No changes needed.", pm);
