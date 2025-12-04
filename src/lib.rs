@@ -15,8 +15,9 @@ pub use build_systems::{
 };
 pub use dependencies::{add_dependencies, remove_dependencies};
 pub use features::{
-	add_package_manager_to_project, convert_build_system, convert_build_system_interactive, detect_build_system,
-	detect_package_manager, list_features, remove_package_manager_from_project,
+	add_package_manager_to_project, convert_build_system, convert_build_system_interactive,
+	detect_build_system, detect_package_manager, list_features,
+	remove_package_manager_from_project,
 };
 pub use file_handler::create_dir;
 pub use languages::{Language, LanguageConsts};

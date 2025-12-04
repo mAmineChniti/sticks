@@ -28,11 +28,20 @@ pub fn convert_build_system(from: BuildSystem, to: BuildSystem, project_name: &s
 	convert_build_system_with_prompt(from, to, project_name, false)
 }
 
-pub fn convert_build_system_interactive(from: BuildSystem, to: BuildSystem, project_name: &str) -> Result<()> {
+pub fn convert_build_system_interactive(
+	from: BuildSystem,
+	to: BuildSystem,
+	project_name: &str,
+) -> Result<()> {
 	convert_build_system_with_prompt(from, to, project_name, true)
 }
 
-fn convert_build_system_with_prompt(from: BuildSystem, to: BuildSystem, project_name: &str, interactive: bool) -> Result<()> {
+fn convert_build_system_with_prompt(
+	from: BuildSystem,
+	to: BuildSystem,
+	project_name: &str,
+	interactive: bool,
+) -> Result<()> {
 	if from == to {
 		anyhow::bail!("Project already uses {}. No conversion needed.", to);
 	}

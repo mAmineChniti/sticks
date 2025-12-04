@@ -129,7 +129,9 @@ impl Language {
 		Self::from_project_structure_with_prompt(true)
 	}
 
-	pub fn from_project_structure_with_prompt(interactive: bool) -> Result<Language, anyhow::Error> {
+	pub fn from_project_structure_with_prompt(
+		interactive: bool,
+	) -> Result<Language, anyhow::Error> {
 		if Path::new("src").exists() {
 			let entries = fs::read_dir("src").context("Failed to read src directory")?;
 
@@ -156,26 +158,24 @@ impl Language {
 		println!("   [1] C");
 		println!("   [2] C++");
 		print!("   Choice (1-2): ");
-		
+
 		use std::io::{self, Write};
 		io::stdout().flush().unwrap();
-		
+
 		let mut input = String::new();
 		match io::stdin().read_line(&mut input) {
-			Ok(_) => {
-				match input.trim() {
-					"1" | "c" | "C" => {
-						println!("✓ Selected C language");
-						Ok(Language::C)
-					},
-					"2" | "cpp" | "C++" | "c++" => {
-						println!("✓ Selected C++ language");
-						Ok(Language::Cpp)
-					},
-					_ => {
-						println!("Invalid choice. Defaulting to C.");
-						Ok(Language::C)
-					}
+			Ok(_) => match input.trim() {
+				"1" | "c" | "C" => {
+					println!("✓ Selected C language");
+					Ok(Language::C)
+				}
+				"2" | "cpp" | "C++" | "c++" => {
+					println!("✓ Selected C++ language");
+					Ok(Language::Cpp)
+				}
+				_ => {
+					println!("Invalid choice. Defaulting to C.");
+					Ok(Language::C)
 				}
 			},
 			Err(_) => {
