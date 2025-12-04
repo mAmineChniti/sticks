@@ -40,7 +40,7 @@
 - 🔧 **Modular Features** - Add/remove build systems and package managers to existing projects post-creation
 - ⚡ **Command Aliases** - Short aliases for faster typing (f, add-pm, rm-pm, etc.)
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
-- ✅ **Quality Assured** - Comprehensive test suite with 64 automated tests (100% coverage)
+- ✅ **Quality Assured** - Comprehensive test suite with 62 automated tests (100% coverage)
 - 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
 
 ## Installation
@@ -118,6 +118,7 @@ sticks
 ```
 
 Follow the prompts to:
+
 1. Enter your project name
 2. Choose language (C or C++)
 3. Select build system (Makefile or CMake)
@@ -158,6 +159,7 @@ sticks
 ```
 
 This launches a guided setup where you can:
+
 - Enter project name
 - Select language (C or C++) using arrow keys
 - Choose build system (Makefile or CMake) using arrow keys
@@ -182,9 +184,9 @@ Feature management also supports shortcuts:
 
 ```bash
 sticks f list                     # List project features
-sticks f add-pm conan --project myapp   # Add Conan (shortcut for add-package-manager)
+sticks f add-pm conan myapp             # Add Conan (shortcut for add-package-manager)
 sticks f rm-pm vcpkg                    # Remove vcpkg (shortcut for remove-package-manager)
-sticks f convert --to cmake      # Convert build system
+sticks f convert cmake                  # Convert build system
 ```
 
 ## Getting Started
@@ -266,7 +268,8 @@ cd my-project
 This generates a `conanfile.txt`. To add dependencies:
 
 1. Edit `conanfile.txt` and add packages to the `[requires]` section:
-   ```
+
+   ```ini
    [requires]
    libcurl/7.85.0
    openssl/1.1.1q
@@ -288,6 +291,7 @@ cd my-project
 This generates a `vcpkg.json`. To add dependencies:
 
 1. Edit `vcpkg.json` and add packages to the `"dependencies"` array:
+  
    ```json
    "dependencies": [
      "libcurl",
@@ -311,6 +315,7 @@ sticks f list
 ```
 
 Output shows:
+
 - Current build system (Makefile or CMake)
 - Configured package managers
 - Configuration files status
@@ -331,6 +336,7 @@ sticks f convert cmake my_project
 ```
 
 This will:
+
 - Remove old build system file
 - Generate new configuration with your source files
 - Maintain project structure
@@ -450,7 +456,7 @@ rm ~/.local/bin/sticks
 
 A typical sticks-managed project looks like:
 
-```
+```bash
 my-project/
 ├── src/
 │   ├── main.cpp        # Entry point

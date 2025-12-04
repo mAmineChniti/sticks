@@ -112,17 +112,14 @@ fn main() {
 fn run() -> Result<()> {
 	let args: Vec<String> = env::args().collect();
 
-	// Handle interactive mode when called with no arguments
 	if args.len() == 1 {
 		return sticks::interactive::run_interactive();
 	}
 
-	// Parse shortcuts and convert to full commands
 	let args = handle_shortcuts(args);
 
 	let cli = Cli::parse_from(&args);
 
-	// If no command provided, show interactive mode
 	let command = match cli.command {
 		Some(cmd) => cmd,
 		None => return sticks::interactive::run_interactive(),
@@ -185,7 +182,7 @@ fn run() -> Result<()> {
 			let lang = match language {
 				Some(l) => l.parse::<Language>()?,
 				None => {
-					// If no language provided, trigger interactive selection
+
 					sticks::interactive::select_language()
 				}
 			};
@@ -278,7 +275,6 @@ fn handle_feature_action(action: FeatureAction) -> Result<()> {
 	Ok(())
 }
 
-/// Convert shorthand commands to full command names
 fn handle_shortcuts(args: Vec<String>) -> Vec<String> {
 	if args.len() < 2 {
 		return args;
@@ -293,7 +289,7 @@ fn handle_shortcuts(args: Vec<String>) -> Vec<String> {
 		"a" => "add",
 		"r" => "remove",
 		"u" => "update",
-		_ => return args, // Not a shortcut
+		_ => return args,
 	};
 
 	new_args.push(expanded.to_string());

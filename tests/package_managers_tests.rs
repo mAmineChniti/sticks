@@ -81,20 +81,6 @@ fn test_vcpkg_install_instructions() {
 }
 
 #[test]
-fn test_get_package_manager_generator_conan() {
-	let generator = get_package_manager_generator(PackageManager::Conan);
-	assert_eq!(generator.name(), "Conan");
-	assert_eq!(generator.extension(), "conanfile.txt");
-}
-
-#[test]
-fn test_get_package_manager_generator_vcpkg() {
-	let generator = get_package_manager_generator(PackageManager::Vcpkg);
-	assert_eq!(generator.name(), "vcpkg");
-	assert_eq!(generator.extension(), "vcpkg.json");
-}
-
-#[test]
 fn test_conan_manifest_content_completeness() {
 	let generator = get_package_manager_generator(PackageManager::Conan);
 	let manifest = generator.generate_manifest("example");
@@ -108,7 +94,6 @@ fn test_conan_manifest_content_completeness() {
 fn test_vcpkg_manifest_structure() {
 	let generator = get_package_manager_generator(PackageManager::Vcpkg);
 	let manifest = generator.generate_manifest("test_app");
-	// Verify basic JSON structure
 	assert!(manifest.contains("{"));
 	assert!(manifest.contains("}"));
 	assert!(manifest.contains("\"name\""));

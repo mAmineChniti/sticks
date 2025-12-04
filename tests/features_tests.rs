@@ -146,15 +146,12 @@ fn test_convert_build_system_makefile_to_cmake() {
 	fs::create_dir_all(&temp_dir).unwrap();
 	env::set_current_dir(&temp_dir).unwrap();
 
-	// Create a Makefile project
 	fs::create_dir("src").unwrap();
 	fs::write("src/main.c", "int main() {}").unwrap();
 	fs::write("Makefile", "all:\n\tbuild").unwrap();
 
-	// Verify Makefile exists
 	assert!(Path::new("Makefile").exists());
 
-	// Convert to CMake
 	let result = convert_build_system(
 		sticks::BuildSystem::Makefile,
 		sticks::BuildSystem::CMake,
@@ -162,7 +159,6 @@ fn test_convert_build_system_makefile_to_cmake() {
 	);
 	assert!(result.is_ok(), "Failed to convert: {:?}", result.err());
 
-	// Verify conversion
 	assert!(
 		!Path::new("Makefile").exists(),
 		"Makefile should be removed"
@@ -229,11 +225,9 @@ fn test_add_package_manager_to_project() {
 	fs::create_dir_all(&temp_dir).unwrap();
 	env::set_current_dir(&temp_dir).unwrap();
 
-	// Create basic project structure
 	fs::create_dir("src").unwrap();
 	fs::write("src/main.c", "int main() {}").unwrap();
 
-	// Add Conan
 	let result = add_package_manager_to_project(PackageManager::Conan, "my_project");
 	assert!(result.is_ok(), "Failed to add Conan: {:?}", result.err());
 	assert!(Path::new("conanfile.txt").exists());

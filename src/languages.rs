@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
@@ -124,9 +125,7 @@ impl FromStr for Language {
 }
 
 impl Language {
-	/// Detect language from existing project structure
 	pub fn from_project_structure() -> Result<Language, anyhow::Error> {
-		// Check src directory for source files
 		if Path::new("src").exists() {
 			let entries = fs::read_dir("src").context("Failed to read src directory")?;
 
@@ -144,9 +143,6 @@ impl Language {
 			}
 		}
 
-		// Default to C
 		Ok(Language::C)
 	}
 }
-
-use anyhow::Context;

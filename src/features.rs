@@ -4,7 +4,6 @@ use std::path::Path;
 
 use crate::{BuildSystem, PackageManager};
 
-/// Detect the current build system in a project
 pub fn detect_build_system() -> Result<Option<BuildSystem>> {
 	if Path::new("CMakeLists.txt").exists() {
 		Ok(Some(BuildSystem::CMake))
@@ -15,7 +14,6 @@ pub fn detect_build_system() -> Result<Option<BuildSystem>> {
 	}
 }
 
-/// Detect if a package manager is already configured
 pub fn detect_package_manager() -> Result<Option<PackageManager>> {
 	if Path::new("conanfile.txt").exists() || Path::new("conanfile.py").exists() {
 		Ok(Some(PackageManager::Conan))
@@ -26,7 +24,6 @@ pub fn detect_package_manager() -> Result<Option<PackageManager>> {
 	}
 }
 
-/// Convert from one build system to another
 pub fn convert_build_system(from: BuildSystem, to: BuildSystem, project_name: &str) -> Result<()> {
 	if from == to {
 		anyhow::bail!("Project already uses {}. No conversion needed.", to);
@@ -34,7 +31,6 @@ pub fn convert_build_system(from: BuildSystem, to: BuildSystem, project_name: &s
 
 	let language = crate::languages::Language::from_project_structure()?;
 
-	// Remove old build system file
 	match from {
 		BuildSystem::Makefile => {
 			if Path::new("Makefile").exists() {
@@ -50,7 +46,6 @@ pub fn convert_build_system(from: BuildSystem, to: BuildSystem, project_name: &s
 		}
 	}
 
-	// Generate new build system file
 	let generator = crate::get_generator(to);
 	let build_file_content = generator.generate_build_file(language, project_name);
 	fs::write(generator.extension(), build_file_content)
@@ -60,9 +55,8 @@ pub fn convert_build_system(from: BuildSystem, to: BuildSystem, project_name: &s
 	Ok(())
 }
 
-/// Add a package manager to an existing project
 pub fn add_package_manager_to_project(pm: PackageManager, project_name: &str) -> Result<()> {
-	// Check if package manager already exists
+
 	if let Ok(Some(existing)) = detect_package_manager() {
 		if existing == pm {
 			anyhow::bail!("Project already uses {}. No changes needed.", pm);
@@ -88,7 +82,6 @@ pub fn add_package_manager_to_project(pm: PackageManager, project_name: &str) ->
 	Ok(())
 }
 
-/// Remove a package manager from a project
 pub fn remove_package_manager_from_project(pm: PackageManager) -> Result<()> {
 	let pm_generator = crate::get_package_manager_generator(pm);
 
@@ -106,24 +99,20 @@ pub fn remove_package_manager_from_project(pm: PackageManager) -> Result<()> {
 	Ok(())
 }
 
-/// List all features detected in the current project
 pub fn list_features() -> Result<()> {
 	println!("\n📦 Project Features:");
 	println!("====================\n");
 
-	// Build system
 	match detect_build_system()? {
 		Some(bs) => println!("  Build System:     {}", bs),
 		None => println!("  Build System:     (none detected)"),
 	}
 
-	// Package manager
 	match detect_package_manager()? {
 		Some(pm) => println!("  Package Manager:  {}", pm),
 		None => println!("  Package Manager:  (none configured)"),
 	}
 
-	// Project structure
 	let has_src = Path::new("src").exists();
 	let has_vscode = Path::new(".vscode").exists();
 	let has_gitignore = Path::new(".gitignore").exists();
