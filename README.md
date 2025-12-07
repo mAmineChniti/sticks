@@ -492,25 +492,32 @@ We welcome contributions! Here's how to get involved:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
-## Roadmap
+## Contributors
 
-- [X] Implement dependency removal with `sticks remove`
-- [X] Auto-cleanup of empty `install-deps` rule
-- [X] Modularized codebase
-- [X] Batch dependency operations
-- [X] CI/CD pipeline with automated releases
-- [X] Self-update mechanism without Cargo dependency
-- [X] Multi-architecture support (x86_64)
-- [X] Comprehensive test suite with automated testing
-- [X] Quality gates in CI/CD (tests run before releases)
-- [X] CMake support alongside Makefile
-- [X] Auto-generated .gitignore, .editorconfig, .clang-format
-- [X] VSCode integration (settings, launch config, tasks)
-- [X] Auto-generated README templates
-- [X] Integration tests for end-to-end workflows
-- [ ] Template system for custom project structures
-- [X] Package manager integration (conan, vcpkg)
-- [X] Code coverage reporting
+This project is maintained by:
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/mAmineChniti">
+        <img src="https://github.com/mAmineChniti.png" width="100px;" alt="mAmineChniti"/>
+        <br />
+        <sub><b>mAmineChniti</b></sub>
+      </a>
+      <br />
+      <sub>Creator & Maintainer</sub>
+    </td>
+    <td align="center">
+      <a href="https://github.com/omibo">
+        <img src="https://github.com/omibo.png" width="100px;" alt="omibo"/>
+        <br />
+        <sub><b>omibo</b></sub>
+      </a>
+      <br />
+      <sub>Contributor</sub>
+    </td>
+  </tr>
+</table>
 
 ## License
 
