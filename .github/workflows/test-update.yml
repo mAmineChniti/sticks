@@ -121,11 +121,9 @@ jobs:
           echo "Testing cargo install update from v${{ steps.versions.outputs.PREV_VERSION }} to v${{ steps.versions.outputs.NEW_VERSION }}"
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          profile: minimal
-          override: true
 
       - name: Install previous version via cargo
         run: |
