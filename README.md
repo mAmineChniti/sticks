@@ -71,7 +71,7 @@ See [sticks-aur repository](https://aur.archlinux.org/packages/sticks-aur) for p
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.4-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.5-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -425,7 +425,7 @@ yay -Syu sticks-aur
 paru -Syu sticks-aur
 
 # Debian/Ubuntu (download new .deb)
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.4-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.5-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 
 # Cargo installation

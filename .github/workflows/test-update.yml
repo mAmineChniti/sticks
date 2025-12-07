@@ -1,0 +1,327 @@
+name: Test Update Functionality
+
+on:
+  workflow_run:
+    workflows: ["Release Packages"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  test-deb-update:
+    name: Test .deb Package Update
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Get versions
+        id: versions
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
+          PREVIOUS=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//' | sed -n '2p')
+          echo "PREV_VERSION=$PREVIOUS" >> $GITHUB_OUTPUT
+          echo "NEW_VERSION=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: Display test versions
+        run: |
+          echo "Testing update from v${{ steps.versions.outputs.PREV_VERSION }} to v${{ steps.versions.outputs.NEW_VERSION }}"
+
+      - name: Download previous version .deb
+        run: |
+          echo "📥 Downloading previous version v${{ steps.versions.outputs.PREV_VERSION }}"
+          curl -L -o sticks-old.deb \
+            "https://github.com/${{ github.repository }}/releases/download/v${{ steps.versions.outputs.PREV_VERSION }}/sticks_${{ steps.versions.outputs.PREV_VERSION }}-1_amd64.deb"
+          
+          if [ ! -f sticks-old.deb ]; then
+            echo "❌ Failed to download previous version"
+            exit 1
+          fi
+          
+          ls -lh sticks-old.deb
+
+      - name: Install previous version
+        run: |
+          echo "📦 Installing previous version v${{ steps.versions.outputs.PREV_VERSION }}"
+          sudo dpkg -i sticks-old.deb || sudo apt-get install -f -y
+          
+          echo "✓ Verifying installation"
+          which sticks
+          sticks --version
+
+      - name: Verify previous version
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Installed version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ steps.versions.outputs.PREV_VERSION }}"; then
+            echo "✓ Previous version installed correctly"
+          else
+            echo "❌ Version mismatch!"
+            exit 1
+          fi
+
+      - name: Test update command
+        run: |
+          echo "🔄 Testing update from v${{ steps.versions.outputs.PREV_VERSION }} to v${{ steps.versions.outputs.NEW_VERSION }}"
+          
+          echo "y" | sticks update || true
+          
+          sleep 2
+          
+          echo "✓ Verifying updated version"
+          sticks --version
+
+      - name: Verify updated version
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Updated version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ steps.versions.outputs.NEW_VERSION }}"; then
+            echo "✅ Update successful! Now running v${{ steps.versions.outputs.NEW_VERSION }}"
+          else
+            echo "❌ Update failed or version mismatch!"
+            echo "Expected: ${{ steps.versions.outputs.NEW_VERSION }}"
+            echo "Got: $VERSION_OUTPUT"
+            exit 1
+          fi
+
+      - name: Test basic functionality after update
+        run: |
+          echo "🧪 Testing basic functionality"
+          
+          mkdir -p /tmp/test-project
+          cd /tmp/test-project
+          
+          echo "Creating test project..."
+          sticks c test_app
+          
+          if [ -d "test_app" ]; then
+            echo "✅ Project creation works after update"
+          else
+            echo "❌ Project creation failed"
+            exit 1
+          fi
+
+  test-cargo-update:
+    name: Test Cargo Install Update
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Get versions
+        id: versions
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
+          PREVIOUS=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//' | sed -n '2p')
+          echo "PREV_VERSION=$PREVIOUS" >> $GITHUB_OUTPUT
+          echo "NEW_VERSION=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: Display test versions
+        run: |
+          echo "Testing cargo install update from v${{ steps.versions.outputs.PREV_VERSION }} to v${{ steps.versions.outputs.NEW_VERSION }}"
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install previous version via cargo
+        run: |
+          echo "📥 Installing previous version v${{ steps.versions.outputs.PREV_VERSION }} via cargo"
+          cargo install sticks --version ${{ steps.versions.outputs.PREV_VERSION }} --force
+
+      - name: Verify previous version
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Installed version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ steps.versions.outputs.PREV_VERSION }}"; then
+            echo "✓ Previous version installed correctly via cargo"
+          else
+            echo "❌ Version mismatch!"
+            exit 1
+          fi
+
+      - name: Test update command
+        run: |
+          echo "🔄 Testing cargo-based update from v${{ steps.versions.outputs.PREV_VERSION }} to v${{ steps.versions.outputs.NEW_VERSION }}"
+          
+          sticks update || true
+          
+          sleep 2
+          
+          echo "✓ Verifying updated version"
+          sticks --version
+
+      - name: Verify updated version
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Updated version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ steps.versions.outputs.NEW_VERSION }}"; then
+            echo "✅ Update successful! Now running v${{ steps.versions.outputs.NEW_VERSION }}"
+          else
+            echo "❌ Update failed or version mismatch!"
+            echo "Expected: ${{ steps.versions.outputs.NEW_VERSION }}"
+            echo "Got: $VERSION_OUTPUT"
+            exit 1
+          fi
+
+      - name: Test basic functionality after update
+        run: |
+          echo "🧪 Testing basic functionality"
+          
+          mkdir -p /tmp/test-project
+          cd /tmp/test-project
+          
+          echo "Creating test project..."
+          sticks c test_app
+          
+          if [ -d "test_app" ]; then
+            echo "✅ Project creation works after update"
+          else
+            echo "❌ Project creation failed"
+            exit 1
+          fi
+
+  test-binary-update:
+    name: Test Binary Update
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Get versions
+        id: versions
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
+          PREVIOUS=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//' | sed -n '2p')
+          echo "PREV_VERSION=$PREVIOUS" >> $GITHUB_OUTPUT
+          echo "NEW_VERSION=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: Display test versions
+        run: |
+          echo "Testing binary update from v${{ steps.versions.outputs.PREV_VERSION }} to v${{ steps.versions.outputs.NEW_VERSION }}"
+
+      - name: Download previous version binary
+        run: |
+          echo "📥 Downloading previous version v${{ steps.versions.outputs.PREV_VERSION }}"
+          curl -L -o sticks-old \
+            "https://github.com/${{ github.repository }}/releases/download/v${{ steps.versions.outputs.PREV_VERSION }}/sticks-linux-x86_64"
+          
+          chmod +x sticks-old
+          
+          if [ ! -f sticks-old ]; then
+            echo "❌ Failed to download previous version"
+            exit 1
+          fi
+          
+          ls -lh sticks-old
+
+      - name: Install previous version
+        run: |
+          echo "📦 Installing previous version v${{ steps.versions.outputs.PREV_VERSION }}"
+          mkdir -p ~/.local/bin
+          mv sticks-old ~/.local/bin/sticks
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Verify previous version
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Installed version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ steps.versions.outputs.PREV_VERSION }}"; then
+            echo "✓ Previous version installed correctly"
+          else
+            echo "❌ Version mismatch!"
+            exit 1
+          fi
+
+      - name: Test update command
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "🔄 Testing binary update from v${{ steps.versions.outputs.PREV_VERSION }} to v${{ steps.versions.outputs.NEW_VERSION }}"
+          
+          sticks update || true
+          
+          sleep 2
+          
+          echo "✓ Verifying updated version"
+          sticks --version
+
+      - name: Verify updated version
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Updated version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ steps.versions.outputs.NEW_VERSION }}"; then
+            echo "✅ Update successful! Now running v${{ steps.versions.outputs.NEW_VERSION }}"
+          else
+            echo "❌ Update failed or version mismatch!"
+            echo "Expected: ${{ steps.versions.outputs.NEW_VERSION }}"
+            echo "Got: $VERSION_OUTPUT"
+            exit 1
+          fi
+
+      - name: Test basic functionality after update
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "🧪 Testing basic functionality"
+          
+          mkdir -p /tmp/test-project
+          cd /tmp/test-project
+          
+          echo "Creating test project..."
+          sticks c test_app
+          
+          if [ -d "test_app" ]; then
+            echo "✅ Project creation works after update"
+          else
+            echo "❌ Project creation failed"
+            exit 1
+          fi
+
+  update-test-summary:
+    name: Update Test Summary
+    runs-on: ubuntu-latest
+    needs: [test-deb-update, test-cargo-update, test-binary-update]
+    if: always()
+    
+    steps:
+      - name: Check test results
+        run: |
+          echo "## Update Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.test-deb-update.result }}" = "success" ]; then
+            echo "✅ .deb package update: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ .deb package update: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.test-cargo-update.result }}" = "success" ]; then
+            echo "✅ Cargo install update: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Cargo install update: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.test-binary-update.result }}" = "success" ]; then
+            echo "✅ Binary update: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Binary update: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.test-deb-update.result }}" = "success" ] && \
+             [ "${{ needs.test-cargo-update.result }}" = "success" ] && \
+             [ "${{ needs.test-binary-update.result }}" = "success" ]; then
+            echo "🎉 All update tests passed successfully!" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "⚠️ Some update tests failed. Please review the logs above." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
