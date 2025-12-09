@@ -156,26 +156,25 @@ pub fn update_project() -> Result<()> {
 
 		let status = if Command::new("wget2").arg("--version").output().is_ok() {
 			Command::new("wget2")
-				.args(["-c", "-O", temp_deb.to_str().unwrap(), &download_url])
+				.args(["-c", "-O"])
+				.arg(&temp_deb)
+				.arg(&download_url)
 				.status()
 				.context("Failed to download .deb package with wget2")
 		} else if Command::new("wget").arg("--version").output().is_ok() {
 			Command::new("wget")
-				.args(["-c", "-O", temp_deb.to_str().unwrap(), &download_url])
+				.args(["-c", "-O"])
+				.arg(&temp_deb)
+				.arg(&download_url)
 				.status()
 				.context("Failed to download .deb package with wget")
 		} else {
 			Command::new("curl")
-				.args([
-					"-L",
-					"-C",
-					"-",
-					"-o",
-					temp_deb.to_str().unwrap(),
-					&download_url,
-				])
+				.args(["-L", "-C", "-", "-o"])
+				.arg(&temp_deb)
+				.arg(&download_url)
 				.status()
-				.context("Failed to download .deb package. Is curl or wget installed?")
+				.context("Failed to download .deb package. Is curl, wget, or wget2 installed?")
 		}?;
 
 		if !status.success() {

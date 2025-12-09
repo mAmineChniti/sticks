@@ -474,7 +474,7 @@ my-project/
 - **Runtime Requirements:** GCC (for compiling your C/C++ projects)
 - **Supported Architectures:** x86_64
 - **Supported Platforms:** Linux (Arch, Debian, Ubuntu, others)
-- **Test Coverage:** 18 comprehensive tests covering all core functionality
+- **Test Coverage:** 62 comprehensive tests covering all core functionality (100% coverage)
 - **CI/CD:** Automated testing, building, and releases via GitHub Actions
 
 ## Contributing
