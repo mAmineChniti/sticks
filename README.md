@@ -491,26 +491,17 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 This project is maintained by:
 
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" style="border: none;">
-        <a href="https://github.com/mAmineChniti">
-          <img src="https://github.com/mAmineChniti.png" width="80px" style="border-radius: 50%;" alt="mAmineChniti"/><br />
-          <b>mAmineChniti</b><br />
-          <sub>Creator & Maintainer</sub>
-        </a>
-      </td>
-      <td align="center" style="border: none;">
-        <a href="https://github.com/omibo">
-          <img src="https://github.com/omibo.png" width="80px" style="border-radius: 50%;" alt="omibo"/><br />
-          <b>omibo</b><br />
-          <sub>Contributor</sub>
-        </a>
-      </td>
-    </tr>
-  </table>
-</div>
+<a href="https://github.com/mAmineChniti">
+  <img src="https://github.com/mAmineChniti.png" width="70" height="70" style="border-radius:50%" alt="mAmineChniti"/><br />
+  <sub><b>mAmineChniti</b></sub><br />
+  <sub>Creator & Maintainer</sub>
+</a>
+&nbsp;&nbsp;&nbsp;
+<a href="https://github.com/omibo">
+  <img src="https://github.com/omibo.png" width="70" height="70" style="border-radius:50%" alt="omibo"/><br />
+  <sub><b>omibo</b></sub><br />
+  <sub>Contributor</sub>
+</a>
 
 ## License
 
