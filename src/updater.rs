@@ -154,10 +154,29 @@ pub fn update_project() -> Result<()> {
 		let download_url = format!("{}/{}", github::RELEASE_DOWNLOAD_URL, deb_name);
 		let temp_deb = temp_dir.join(&deb_name);
 
-		let status = Command::new("curl")
-			.args(["-L", "-f", "-o", temp_deb.to_str().unwrap(), &download_url])
-			.status()
-			.context("Failed to download .deb package. Is curl installed?")?;
+		let status = if Command::new("wget2").arg("--version").output().is_ok() {
+			Command::new("wget2")
+				.args(["-c", "-O", temp_deb.to_str().unwrap(), &download_url])
+				.status()
+				.context("Failed to download .deb package with wget2")
+		} else if Command::new("wget").arg("--version").output().is_ok() {
+			Command::new("wget")
+				.args(["-c", "-O", temp_deb.to_str().unwrap(), &download_url])
+				.status()
+				.context("Failed to download .deb package with wget")
+		} else {
+			Command::new("curl")
+				.args([
+					"-L",
+					"-C",
+					"-",
+					"-o",
+					temp_deb.to_str().unwrap(),
+					&download_url,
+				])
+				.status()
+				.context("Failed to download .deb package. Is curl or wget installed?")
+		}?;
 
 		if !status.success() {
 			fs::remove_dir_all(&temp_dir).ok();

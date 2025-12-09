@@ -40,7 +40,8 @@ fn test_makefile_generator() {
 
 	let makefile = generator.generate_build_file(Language::C, "test_project");
 	assert!(makefile.contains("CC = gcc"));
-	assert!(makefile.contains("TARGET = test_project"));
+	assert!(makefile.contains("TARGET = $(BIN_DIR)/test_project"));
+	assert!(makefile.contains("BIN_DIR = bin"));
 	assert!(makefile.contains("all:"));
 	assert!(makefile.contains("clean:"));
 }
@@ -67,7 +68,8 @@ fn test_makefile_generator_cpp() {
 	let generator = MakefileGenerator;
 	let makefile = generator.generate_build_file(Language::Cpp, "my_cpp_project");
 	assert!(makefile.contains("CC = g++"));
-	assert!(makefile.contains("TARGET = my_cpp_project"));
+	assert!(makefile.contains("TARGET = $(BIN_DIR)/my_cpp_project"));
+	assert!(makefile.contains("BIN_DIR = bin"));
 	assert!(makefile.contains("*.cpp"));
 }
 

@@ -17,6 +17,7 @@ pub mod project {
 	pub const SRC_DIR: &str = "src";
 	pub const INCLUDE_DIR: &str = "include";
 	pub const BUILD_DIR: &str = "build";
+	pub const BIN_DIR: &str = "bin";
 	pub const VSCODE_DIR: &str = ".vscode";
 }
 
