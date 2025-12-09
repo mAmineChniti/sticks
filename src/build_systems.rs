@@ -69,6 +69,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 				set(CMAKE_C_STANDARD 11)\n\
 				set(CMAKE_C_STANDARD_REQUIRED ON)\n\
 				set(CMAKE_C_FLAGS \"${{CMAKE_C_FLAGS}} -Wall -Wextra -Werror\")\n\
+				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
 				\n\
 				file(GLOB_RECURSE SOURCES \"src/*.c\")\n\
 				\n\
@@ -86,6 +87,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 				set(CMAKE_CXX_STANDARD 17)\n\
 				set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\
 				set(CMAKE_CXX_FLAGS \"${{CMAKE_CXX_FLAGS}} -Wall -Wextra -Werror\")\n\
+				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
 				\n\
 				file(GLOB_RECURSE SOURCES \"src/*.cpp\")\n\
 				\n\

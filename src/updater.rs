@@ -154,10 +154,28 @@ pub fn update_project() -> Result<()> {
 		let download_url = format!("{}/{}", github::RELEASE_DOWNLOAD_URL, deb_name);
 		let temp_deb = temp_dir.join(&deb_name);
 
-		let status = Command::new("curl")
-			.args(["-L", "-f", "-o", temp_deb.to_str().unwrap(), &download_url])
-			.status()
-			.context("Failed to download .deb package. Is curl installed?")?;
+		let status = if Command::new("wget2").arg("--version").output().is_ok() {
+			Command::new("wget2")
+				.args(["-c", "-O"])
+				.arg(&temp_deb)
+				.arg(&download_url)
+				.status()
+				.context("Failed to download .deb package with wget2")
+		} else if Command::new("wget").arg("--version").output().is_ok() {
+			Command::new("wget")
+				.args(["-c", "-O"])
+				.arg(&temp_deb)
+				.arg(&download_url)
+				.status()
+				.context("Failed to download .deb package with wget")
+		} else {
+			Command::new("curl")
+				.args(["-L", "-C", "-", "-o"])
+				.arg(&temp_deb)
+				.arg(&download_url)
+				.status()
+				.context("Failed to download .deb package. Is curl, wget, or wget2 installed?")
+		}?;
 
 		if !status.success() {
 			fs::remove_dir_all(&temp_dir).ok();
@@ -170,7 +188,8 @@ pub fn update_project() -> Result<()> {
 
 		println!("📦 Installing .deb package (requires sudo)...");
 		let install_status = Command::new("sudo")
-			.args(["dpkg", "-i", temp_deb.to_str().unwrap()])
+			.args(["dpkg", "-i"])
+			.arg(&temp_deb)
 			.status()
 			.context("Failed to install .deb package")?;
 

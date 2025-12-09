@@ -18,20 +18,21 @@ pub trait LanguageConsts {
 			# Directories\n\
 			SRC_DIR = src\n\
 			BUILD_DIR = build\n\
+			BIN_DIR = bin\n\
 			\n\
 			# Source files\n\
 			SRCS = $(wildcard $(SRC_DIR)/*.{})\n\
 			OBJS = $(SRCS:$(SRC_DIR)/%.{}=$(BUILD_DIR)/%.o)\n\
 			\n\
 			# Target executable\n\
-			TARGET = {}\n\
+			TARGET = $(BIN_DIR)/{}\n\
 			\n\
 			# Default target\n\
 			all: $(TARGET)\n\
 			\n\
 			# Build target\n\
 			$(TARGET): $(OBJS)\n\
-			\t@mkdir -p $(BUILD_DIR)\n\
+			\t@mkdir -p $(BUILD_DIR) $(BIN_DIR)\n\
 			\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)\n\
 			\t@echo \"Build complete: $(TARGET)\"\n\
 			\n\
@@ -42,7 +43,7 @@ pub trait LanguageConsts {
 			\n\
 			# Clean build artifacts\n\
 			clean:\n\
-			\t@rm -rf $(BUILD_DIR) $(TARGET)\n\
+			\t@rm -rf $(BUILD_DIR) $(BIN_DIR)\n\
 			\t@echo \"Cleaned build artifacts\"\n\
 			\n\
 			# Run the program\n\

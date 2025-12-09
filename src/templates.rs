@@ -120,7 +120,7 @@ pub fn generate_vscode_launch_config(project_name: &str) -> String {
 		\t\t\t\"name\": \"C/C++ Debug\",\n\
 		\t\t\t\"type\": \"cppdbg\",\n\
 		\t\t\t\"request\": \"launch\",\n\
-		\t\t\t\"program\": \"${{workspaceFolder}}/build/{}\",\n\
+		\t\t\t\"program\": \"${{workspaceFolder}}/bin/{}\",\n\
 		\t\t\t\"args\": [],\n\
 		\t\t\t\"stopAtEntry\": false,\n\
 		\t\t\t\"cwd\": \"${{workspaceFolder}}\",\n\
@@ -149,7 +149,7 @@ pub fn generate_vscode_tasks_config() -> String {
 	\t\t{\n\
 	\t\t\t\"label\": \"build\",\n\
 	\t\t\t\"type\": \"shell\",\n\
-	\t\t\t\"command\": \"mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .\",\n\
+	\t\t\t\"command\": \"mkdir -p build bin && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .\",\n\
 	\t\t\t\"problemMatcher\": [\"$gcc\"],\n\
 	\t\t\t\"group\": {\n\
 	\t\t\t\t\"kind\": \"build\",\n\
@@ -159,7 +159,7 @@ pub fn generate_vscode_tasks_config() -> String {
 	\t\t{\n\
 	\t\t\t\"label\": \"rebuild\",\n\
 	\t\t\t\"type\": \"shell\",\n\
-	\t\t\t\"command\": \"rm -rf build && mkdir -p build && cd build && cmake .. && cmake --build .\",\n\
+	\t\t\t\"command\": \"rm -rf build bin && mkdir -p build bin && cd build && cmake .. && cmake --build .\",\n\
 	\t\t\t\"problemMatcher\": [\"$gcc\"]\n\
 	\t\t}\n\
 	\t]\n\
@@ -198,7 +198,8 @@ pub fn generate_readme(project_name: &str, language: Language) -> String {
 		{}/\n\
 		├── src/              # Source files\n\
 		├── include/          # Header files (if applicable)\n\
-		├── build/            # Build artifacts (generated)\n\
+		├── bin/              # Final compiled binaries (generated)\n\
+		├── build/            # Object files and build artifacts (generated)\n\
 		├── CMakeLists.txt    # CMake configuration\n\
 		├── Makefile          # Makefile configuration\n\
 		└── README.md         # This file\n\

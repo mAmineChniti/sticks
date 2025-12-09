@@ -38,6 +38,7 @@
 - 🔄 **Self-Updating** - Built-in update mechanism that downloads from GitHub releases
 - 📦 **Package Manager Integration** - Support for Conan and vcpkg for dependency management
 - 🔧 **Modular Features** - Add/remove build systems and package managers to existing projects post-creation
+- 🔀 **Git Integration** - Automatically initializes git repository when git is available
 - ⚡ **Command Aliases** - Short aliases for faster typing (f, add-pm, rm-pm, etc.)
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
 - ✅ **Quality Assured** - Comprehensive test suite with 62 automated tests (100% coverage)
@@ -71,7 +72,7 @@ See [sticks-aur repository](https://aur.archlinux.org/packages/sticks-aur) for p
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.5-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.6-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -389,9 +390,9 @@ sticks f list
 When you create a project, Sticks automatically generates:
 
 - **Build System Files:** `Makefile` or `CMakeLists.txt` (your choice)
-- **Git:** `.gitignore`, `.gitattributes` (pre-configured for C/C++)
+- **Git:** `.gitignore`, `.gitattributes` (pre-configured for C/C++), auto-initializes git repository (if git is installed)
 - **Code Style:** `.editorconfig`, `.clang-format` (consistent formatting)
-- **IDE:** VSCode `.vscode/settings.json`, `launch.json`, `tasks.json`
+- **IDE:** VSCode `.vscode/settings.json`, `launch.json`, `tasks.json` (if VS Code is installed)
 - **Documentation:** `README.md` (project-specific template)
 
 This gives you a professional, production-ready project structure out of the box!
@@ -419,14 +420,9 @@ This downloads the latest binary from GitHub releases and replaces your installa
 ```bash
 # Arch Linux (using AUR package manager)
 # Package name: sticks-aur
-sudo pacman -Syu  # Update package database first
 yay -Syu sticks-aur
 # or
 paru -Syu sticks-aur
-
-# Debian/Ubuntu (download new .deb)
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.5-1_amd64.deb
-sudo dpkg -i sticks_*.deb
 
 # Cargo installation
 cargo install sticks --force
@@ -465,9 +461,8 @@ my-project/
 ├── include/
 │   ├── utils.h         # Headers
 │   └── network.h
-├── build/              # Build artifacts (gitignored)
-│   ├── debug/
-│   └── release/
+├── bin/                # Final compiled binaries (gitignored)
+├── build/              # Object files and build artifacts (gitignored)
 └── Makefile            # Auto-generated, customizable
 ```
 
@@ -479,7 +474,7 @@ my-project/
 - **Runtime Requirements:** GCC (for compiling your C/C++ projects)
 - **Supported Architectures:** x86_64
 - **Supported Platforms:** Linux (Arch, Debian, Ubuntu, others)
-- **Test Coverage:** 18 comprehensive tests covering all core functionality
+- **Test Coverage:** 62 comprehensive tests covering all core functionality (100% coverage)
 - **CI/CD:** Automated testing, building, and releases via GitHub Actions
 
 ## Contributing

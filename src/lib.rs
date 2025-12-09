@@ -30,6 +30,7 @@ pub use updater::update_project;
 
 use anyhow::{Context, Result};
 use std::fs;
+use std::process::Command;
 
 pub fn create_project(project_name: &str, language: Language) -> Result<()> {
 	create_project_with_system(project_name, language, BuildSystem::Makefile)
@@ -84,25 +85,29 @@ fn create_project_with_full_config(
 	)
 	.context("Failed to write .clang-format")?;
 
-	fs::create_dir_all(".vscode").context("Failed to create .vscode directory")?;
+	if Command::new("code").arg("--version").output().is_ok() {
+		fs::create_dir_all(".vscode").context("Failed to create .vscode directory")?;
 
-	fs::write(
-		".vscode/settings.json",
-		templates::generate_vscode_settings(language),
-	)
-	.context("Failed to write VSCode settings")?;
+		fs::write(
+			".vscode/settings.json",
+			templates::generate_vscode_settings(language),
+		)
+		.context("Failed to write VSCode settings")?;
 
-	fs::write(
-		".vscode/launch.json",
-		templates::generate_vscode_launch_config(project_name),
-	)
-	.context("Failed to write VSCode launch config")?;
+		fs::write(
+			".vscode/launch.json",
+			templates::generate_vscode_launch_config(project_name),
+		)
+		.context("Failed to write VSCode launch config")?;
 
-	fs::write(
-		".vscode/tasks.json",
-		templates::generate_vscode_tasks_config(),
-	)
-	.context("Failed to write VSCode tasks")?;
+		fs::write(
+			".vscode/tasks.json",
+			templates::generate_vscode_tasks_config(),
+		)
+		.context("Failed to write VSCode tasks")?;
+
+		println!("📝 Generated VSCode configuration");
+	}
 
 	fs::write(
 		"README.md",
@@ -119,6 +124,16 @@ fn create_project_with_full_config(
 		fs::write(pm_generator.extension(), manifest)
 			.with_context(|| format!("Failed to write {} manifest", pm_generator.name()))?;
 		println!("📦 Generated {} configuration", pm);
+	}
+
+	if Command::new("git").arg("--version").output().is_ok()
+		&& Command::new("git")
+			.args(["init", "-q"])
+			.status()
+			.map(|s| s.success())
+			.unwrap_or(false)
+	{
+		println!("📦 Initialized git repository");
 	}
 
 	println!(
