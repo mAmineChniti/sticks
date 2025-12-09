@@ -188,7 +188,8 @@ pub fn update_project() -> Result<()> {
 
 		println!("📦 Installing .deb package (requires sudo)...");
 		let install_status = Command::new("sudo")
-			.args(["dpkg", "-i", temp_deb.to_str().unwrap()])
+			.args(["dpkg", "-i"])
+			.arg(&temp_deb)
 			.status()
 			.context("Failed to install .deb package")?;
 
