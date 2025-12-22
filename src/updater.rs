@@ -49,11 +49,11 @@ mod platform {
 		return "unsupported";
 	}
 
-	fn get_current_version() -> String {
+	pub fn get_current_version() -> String {
 		env!("CARGO_PKG_VERSION").to_string()
 	}
 
-	fn get_latest_version() -> Result<String> {
+	pub fn get_latest_version() -> Result<String> {
 		let output = Command::new("curl")
 			.args([
 				"-s",
