@@ -179,8 +179,6 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.target }}
-          components: rust-src, rustfmt, clippy
 
       - name: Build
         run: |
@@ -296,8 +294,6 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.target }}
-          components: rust-src, rustfmt, clippy
 
       - name: Install cross-compilation toolchain (Linux)
         if: startsWith(matrix.target, 'x86_64-') || startsWith(matrix.target, 'aarch64-')
