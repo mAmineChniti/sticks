@@ -214,8 +214,8 @@ jobs:
             exit 1
           fi
 
-  test-binary-update:
-    name: Test Binary Update
+  test-binary-update-linux:
+    name: Test Binary Update (Linux)
     runs-on: ubuntu-latest
     needs: get-versions
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
@@ -312,10 +312,167 @@ jobs:
             exit 1
           fi
 
+  test-windows-update:
+    name: Test Windows Update
+    runs-on: windows-latest
+    needs: get-versions
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Display test versions
+        run: |
+          echo "Testing Windows update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
+
+      - name: Download previous version binary
+        shell: bash
+        run: |
+          echo "📥 Downloading previous version v${{ needs.get-versions.outputs.prev_version }}"
+          curl -L -o sticks.exe \
+            "https://github.com/${{ github.repository }}/releases/download/v${{ needs.get-versions.outputs.prev_version }}/sticks-windows-x86_64.exe"
+          
+          if [ ! -f "sticks.exe" ]; then
+            echo "❌ Failed to download previous version"
+            exit 1
+          fi
+          
+          mkdir -p "$HOME\AppData\Local\Programs\sticks"
+          mv sticks.exe "$HOME\AppData\Local\Programs\sticks\sticks.exe"
+          echo "$HOME\AppData\Local\Programs\sticks" >> $GITHUB_PATH
+
+      - name: Verify previous version
+        shell: bash
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Installed version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.prev_version }}"; then
+            echo "✓ Previous version installed correctly"
+          else
+            echo "❌ Version mismatch!"
+            exit 1
+          fi
+
+      - name: Test update command
+        shell: bash
+        run: |
+          echo "🔄 Testing Windows update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
+          
+          # Run update with auto-confirmation
+          echo "y" | sticks update > update.log 2>&1 || UPDATE_FAILED=1
+          
+          cat update.log
+          
+          if [ "$UPDATE_FAILED" = "1" ]; then
+            echo "❌ Update command failed (exit code non-zero)"
+            exit 1
+          fi
+          
+          sleep 2
+          
+          echo "✓ Verifying updated version"
+          sticks --version
+
+      - name: Verify updated version
+        shell: bash
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Updated version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.new_version }}"; then
+            echo "✅ Update successful! Now running v${{ needs.get-versions.outputs.new_version }}"
+          else
+            echo "❌ Update failed or version mismatch!"
+            echo "Expected: ${{ needs.get-versions.outputs.new_version }}"
+            echo "Got: $VERSION_OUTPUT"
+            exit 1
+          fi
+
+  test-macos-update:
+    name: Test macOS Update
+    runs-on: macos-latest
+    needs: [get-versions, publish-homebrew]
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Display test versions
+        run: |
+          echo "Testing macOS update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
+
+      - name: Install Homebrew if not installed
+        run: |
+          if ! command -v brew &> /dev/null; then
+            echo "Installing Homebrew..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> $HOME/.zshrc
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+          fi
+          
+          # Add our tap
+          brew tap mAmineChniti/tap
+          
+          # Install the previous version
+          echo "Installing previous version v${{ needs.get-versions.outputs.prev_version }}"
+          brew install mAmineChniti/tap/sticks@${{ needs.get-versions.outputs.prev_version }} || \
+            (brew unlink sticks && brew install mAmineChniti/tap/sticks@${{ needs.get-versions.outputs.prev_version }})
+
+      - name: Verify previous version
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Installed version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.prev_version }}"; then
+            echo "✓ Previous version installed correctly via Homebrew"
+          else
+            echo "❌ Version mismatch!"
+            exit 1
+          fi
+
+      - name: Test Homebrew update
+        run: |
+          echo "🔄 Testing Homebrew update to v${{ needs.get-versions.outputs.new_version }}"
+          brew upgrade mAmineChniti/tap/sticks
+
+      - name: Verify updated version
+        run: |
+          VERSION_OUTPUT=$(sticks --version)
+          echo "Updated version: $VERSION_OUTPUT"
+          
+          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.new_version }}"; then
+            echo "✅ Update successful! Now running v${{ needs.get-versions.outputs.new_version }}"
+          else
+            echo "❌ Update failed or version mismatch!"
+            echo "Expected: ${{ needs.get-versions.outputs.new_version }}"
+            echo "Got: $VERSION_OUTPUT"
+            exit 1
+          fi
+
+      - name: Test basic functionality after update
+        run: |
+          echo "🧪 Testing basic functionality"
+          
+          mkdir -p /tmp/test-project
+          cd /tmp/test-project
+          
+          echo "Creating test project..."
+          sticks c test_app
+          
+          if [ -d "test_app" ]; then
+            echo "✅ Project creation works after update"
+          else
+            echo "❌ Project creation failed"
+            exit 1
+          fi
+
   update-test-summary:
     name: Update Test Summary
     runs-on: ubuntu-latest
-    needs: [get-versions, test-deb-update, test-cargo-update, test-binary-update]
+    needs: 
+      - get-versions
+      - test-deb-update
+      - test-cargo-update
+      - test-binary-update-linux
+      - test-windows-update
+      - test-macos-update
     if: always()
     
     steps:

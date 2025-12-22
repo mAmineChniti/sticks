@@ -161,7 +161,10 @@ impl Language {
 		print!("   Choice (1-2): ");
 
 		use std::io::{self, Write};
-		io::stdout().flush().unwrap();
+		io::stdout().flush().map_err(|e| {
+			println!("Failed to flush stdout: {e}. Continuing anyway.");
+			e
+		})?;
 
 		let mut input = String::new();
 		match io::stdin().read_line(&mut input) {

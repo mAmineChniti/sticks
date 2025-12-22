@@ -10,19 +10,53 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            strip: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            strip: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            strip: false
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            strip: false
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            strip: false
+
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TARGET_DIR: target/${{ matrix.target }}
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Install Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
+      uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-        components: clippy, rustfmt
+        target: ${{ matrix.target }}
+        override: true
+        components: rustfmt, clippy
+
+    - name: Install cross-compilation toolchain (Linux)
+      if: contains(matrix.target, 'linux') && runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+        fi
+        rustup target add ${{ matrix.target }}
 
     - name: Check formatting
       run: cargo fmt --all -- --check
@@ -34,4 +68,20 @@ jobs:
       run: cargo test --verbose
 
     - name: Build
-      run: cargo build --release --verbose
+      run: cargo build --release --target ${{ matrix.target }} --verbose
+
+    - name: Strip binary (Linux only)
+      if: matrix.strip && runner.os == 'Linux'
+      run: |
+        strip target/${{ matrix.target }}/release/sticks
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sticks-${{ matrix.target }}
+        path: |
+          target/${{ matrix.target }}/release/sticks*
+          !**/*.d
+          !**/*.rlib
+        if-no-files-found: error
+        retention-days: 5

@@ -26,6 +26,10 @@
 
 ---
 
+## Platform Support
+
+**sticks** is primarily developed and tested on Linux (x86_64). Some features, such as self-updating and binary downloads, are currently Linux-specific. Windows and macOS support is not guaranteed and may require additional setup or manual steps. Contributions to improve cross-platform compatibility are welcome!
+
 ## Features
 
 - 🎯 **Interactive Mode** - Just run `sticks` for guided project setup with arrow key navigation
@@ -43,6 +47,16 @@
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
 - ✅ **Quality Assured** - Comprehensive test suite with 62 automated tests (100% coverage)
 - 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
+
+
+## Continuous Integration & Security
+
+This project uses GitHub Actions to automatically run:
+
+- `cargo clippy` for code linting (all warnings are treated as errors)
+- `cargo audit` to check for vulnerable dependencies
+
+See `.github/workflows/security-lint.yml` for details.
 
 ## Installation
 
@@ -72,7 +86,7 @@ See [sticks-aur repository](https://aur.archlinux.org/packages/sticks-aur) for p
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.6-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.3.7-rc-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -108,6 +122,17 @@ sudo cp target/release/sticks /usr/local/bin/  # System-wide
 cp target/release/sticks ~/.local/bin/         # User only
 ```
 
+
+## API Documentation
+
+You can generate full API documentation locally with:
+
+```bash
+cargo doc --open
+```
+
+Or view it online (if published) at [docs.rs/sticks](https://docs.rs/sticks).
+
 ## Quick Start
 
 ### Interactive Mode (Easiest!)
@@ -126,6 +151,29 @@ Follow the prompts to:
 4. Your project is created!
 
 Use arrow keys to navigate, Enter to select.
+
+
+### More Usage Examples
+
+#### Create a C project with CMake and Conan
+
+```bash
+sticks c my_c_project --build cmake --package-manager conan
+cd my_c_project
+```
+
+#### Add multiple dependencies and sources
+
+```bash
+sticks add openssl zlib
+sticks src math io
+```
+
+#### Initialize in current directory
+
+```bash
+sticks init cpp --build cmake
+```
 
 ### Command Line
 
