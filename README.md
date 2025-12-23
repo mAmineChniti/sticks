@@ -477,6 +477,30 @@ my-project/
 - **Test Coverage:** 62 comprehensive tests covering all core functionality (100% coverage)
 - **CI/CD:** Automated testing, building, and releases via GitHub Actions
 
+## Development
+
+If you want to work on `sticks` locally, the following commands are useful:
+
+```bash
+# Install toolchain via rustup (if needed)
+rustup toolchain install stable
+
+# Format the code
+cargo fmt --all
+
+# Run the linter (fix warnings where possible)
+cargo clippy --all-targets --all-features
+
+# Run tests
+cargo test --all
+
+# Run the security audit locally
+cargo install cargo-audit --locked
+cargo audit
+```
+
+We run automated checks on every pull request (format, clippy, tests, cargo-audit).
+
 ## Contributing
 
 We welcome contributions! Here's how to get involved:

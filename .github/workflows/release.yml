@@ -109,22 +109,85 @@ jobs:
       contents: write
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq unzip curl
 
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
+      - name: Download CI artifacts for tag
+        id: download-ci-artifacts
+        run: |
+          set -e
+          VERSION=${{ needs.check-version.outputs.version }}
+          echo "Looking for CI workflow run that built tag v${VERSION}..."
+          # Resolve tag -> commit SHA
+          REF_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs/tags/v${VERSION}")
+          TYPE=$(echo "$REF_JSON" | jq -r '.object.type')
+          if [ "$TYPE" = "tag" ]; then
+            TAG_OBJ_URL=$(echo "$REF_JSON" | jq -r '.object.url')
+            TAG_OBJ=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "$TAG_OBJ_URL")
+            COMMIT_SHA=$(echo "$TAG_OBJ" | jq -r '.object.sha')
+          else
+            COMMIT_SHA=$(echo "$REF_JSON" | jq -r '.object.sha')
+          fi
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
+          echo "Tag v${VERSION} points at commit ${COMMIT_SHA}"
 
-      - name: Build release binary
-        run: cargo build --release --verbose
+          # Find the most recent CI workflow run for that commit
+          RUNS_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100")
+          RUN_ID=$(echo "$RUNS_JSON" | jq -r ".workflow_runs[] | select(.head_sha==\"${COMMIT_SHA}\") | .id" | head -n1)
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "❌ Could not find CI run for commit ${COMMIT_SHA}. Listing recent runs for debugging..."
+            echo "$RUNS_JSON" | jq -r '.workflow_runs[] | {id: .id, head_sha: .head_sha, name: .name, conclusion: .conclusion}'
+            exit 1
+          fi
 
-      - name: Build .deb package
-        run: cargo deb
+          echo "Found CI run ID: $RUN_ID"
+
+          ARTIFACTS_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts")
+          echo "$ARTIFACTS_JSON" | jq -r '.artifacts[] | "name: "+.name+" url: "+.archive_download_url'
+
+          mkdir -p ci-artifacts
+          for url in $(echo "$ARTIFACTS_JSON" | jq -r '.artifacts[].archive_download_url'); do
+            filename=$(basename "$url")
+            echo "Downloading $url"
+            curl -sL -H "Authorization: token ${GITHUB_TOKEN}" -o /tmp/artifact.zip "$url"
+            unzip -o /tmp/artifact.zip -d ci-artifacts || true
+          done
+
+          echo "Artifacts downloaded into ci-artifacts/"
+
+      - name: Verify CI artifacts exist
+        run: |
+          echo "Checking for expected binaries or .deb files in ci-artifacts/"
+          if find ci-artifacts -type f \( -name 'sticks-linux-*' -o -name '*.deb' -o -name 'sticks-windows-*.exe' \) | grep -q .; then
+            echo "✓ Found CI artifacts"
+            find ci-artifacts -type f -maxdepth 3 -print
+          else
+            echo "❌ No expected CI artifacts found (expected binaries or .deb files)"
+            ls -la ci-artifacts || true
+            exit 1
+          fi
+
+      - name: Build .deb from CI binary
+        run: |
+          # use the linux-x86_64 binary from ci-artifacts (prefer x86_64 build)
+          if [ -f ci-artifacts/sticks-linux-x86_64 ]; then
+            mkdir -p dist
+            cp ci-artifacts/sticks-linux-x86_64 dist/sticks
+            chmod +x dist/sticks
+            # Build deb using cargo-deb; create a minimal packaging step by copying binary into target/debian
+            cargo install cargo-deb --no-default-features --locked || true
+            # Create a minimal deb using cargo-deb by building package from repo (requires binary present)
+            cargo deb --no-build || true
+            ls -la target/debian || true
+          else
+            echo "No linux x86_64 binary found in CI artifacts"
+            exit 1
+          fi
 
       - name: Upload .deb package
         uses: actions/upload-artifact@v4
@@ -132,7 +195,7 @@ jobs:
           name: sticks-deb
           path: target/debian/*.deb
 
-      - name: Upload to release
+      - name: Upload .deb to release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
@@ -147,40 +210,74 @@ jobs:
       contents: write
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          target: x86_64-unknown-linux-gnu
-
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target x86_64-unknown-linux-gnu
-
-      - name: Strip binary
-        run: strip target/x86_64-unknown-linux-gnu/release/sticks
-
-      - name: Rename binary
+      - name: Install tools
         run: |
-          cp target/x86_64-unknown-linux-gnu/release/sticks sticks-linux-x86_64
-          chmod +x sticks-linux-x86_64
+          sudo apt-get update -y
+          sudo apt-get install -y jq unzip curl
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: sticks-linux-x86_64
-          path: sticks-linux-x86_64
+      - name: Download CI artifacts for tag
+        id: download-ci-artifacts-binary
+        run: |
+          set -e
+          VERSION=${{ needs.check-version.outputs.version }}
+          echo "Looking for CI workflow run that built tag v${VERSION}..."
+          REF_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs/tags/v${VERSION}")
+          TYPE=$(echo "$REF_JSON" | jq -r '.object.type')
+          if [ "$TYPE" = "tag" ]; then
+            TAG_OBJ_URL=$(echo "$REF_JSON" | jq -r '.object.url')
+            TAG_OBJ=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "$TAG_OBJ_URL")
+            COMMIT_SHA=$(echo "$TAG_OBJ" | jq -r '.object.sha')
+          else
+            COMMIT_SHA=$(echo "$REF_JSON" | jq -r '.object.sha')
+          fi
+          echo "Tag v${VERSION} points at commit ${COMMIT_SHA}"
+          RUNS_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100")
+          RUN_ID=$(echo "$RUNS_JSON" | jq -r ".workflow_runs[] | select(.head_sha==\"${COMMIT_SHA}\") | .id" | head -n1)
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "❌ Could not find CI run for commit ${COMMIT_SHA}."
+            exit 1
+          fi
+          echo "Found CI run ID: $RUN_ID"
+          ARTIFACTS_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts")
+          mkdir -p ci-artifacts
+          for url in $(echo "$ARTIFACTS_JSON" | jq -r '.artifacts[].archive_download_url'); do
+            echo "Downloading $url"
+            curl -sL -H "Authorization: token ${GITHUB_TOKEN}" -o /tmp/artifact.zip "$url"
+            unzip -o /tmp/artifact.zip -d ci-artifacts || true
+          done
 
-      - name: Upload to release
+      - name: Verify CI binaries exist
+        run: |
+          echo "Checking for expected binaries in ci-artifacts/"
+          if find ci-artifacts -type f \( -name 'sticks-linux-*' -o -name 'sticks-windows-*.exe' \) | grep -q .; then
+            echo "✓ Found expected binaries"
+            find ci-artifacts -type f -maxdepth 3 -print
+          else
+            echo "❌ No expected binaries found in CI artifacts"
+            ls -la ci-artifacts || true
+            exit 1
+          fi
+
+      - name: Attach binaries to release
+        run: |
+          VERSION=${{ needs.check-version.outputs.version }}
+          # find binaries produced by CI and upload to release using gh-release action
+          ls -la ci-artifacts || true
+          echo "Prepared artifact list above"
+        # upload will be handled by next step using action-gh-release
+
+      - name: Upload artifacts to release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
-          files: sticks-linux-x86_64
+          files: |
+            ci-artifacts/sticks-linux-x86_64
+            ci-artifacts/sticks-linux-aarch64
+            ci-artifacts/sticks-linux-i686
+            ci-artifacts/sticks-windows-x86_64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -97,6 +97,7 @@ fn test_my_feature() {
 #### Continuous Integration
 
 Our CI/CD pipeline automatically:
+
 - ✅ Runs all tests on every push and pull request
 - ✅ Tests must pass before any code can be merged
 - ✅ Builds and releases packages on version changes
@@ -104,6 +105,7 @@ Our CI/CD pipeline automatically:
 - ✅ Builds for multiple architectures (x86_64, aarch64)
 
 **Before submitting a PR:**
+
 1. Ensure all tests pass: `cargo test`
 2. Check formatting: `cargo fmt`
 3. Run linter: `cargo clippy`

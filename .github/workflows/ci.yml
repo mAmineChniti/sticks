@@ -1,0 +1,166 @@
+
+name: CI
+
+on:
+  push:
+    branches: ["master", "main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["master", "main"]
+  workflow_dispatch: {}
+
+jobs:
+  checks:
+    name: Checks for ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            toolchain: stable
+            target: x86_64-unknown-linux-gnu
+          - name: linux-aarch64
+            os: ubuntu-latest
+            toolchain: stable
+            target: aarch64-unknown-linux-gnu
+          - name: linux-i686
+            os: ubuntu-latest
+            toolchain: stable
+            target: i686-unknown-linux-gnu
+          - name: windows-x86_64
+            os: windows-latest
+            toolchain: stable
+            target: x86_64-pc-windows-msvc
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache cargo directories
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.toolchain }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: clippy, rustfmt
+
+      - name: Verify rustc and cargo
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Setup QEMU + buildx for cross (linux runners)
+        if: matrix.os == 'ubuntu-latest' && (matrix.name == 'linux-aarch64' || matrix.name == 'linux-i686')
+        uses: docker/setup-buildx-action@v2
+
+      - name: Register QEMU emulation
+        if: matrix.os == 'ubuntu-latest' && (matrix.name == 'linux-aarch64' || matrix.name == 'linux-i686')
+        uses: docker/setup-qemu-action@v2
+
+      # binfmt registration is handled by docker/setup-qemu-action@v2 above
+
+      - name: Install cross (for reliable cross builds)
+        if: matrix.os == 'ubuntu-latest' && (matrix.name == 'linux-aarch64' || matrix.name == 'linux-i686')
+        run: |
+          cargo install cross --locked || true
+
+      - name: Add target for cross-build
+        run: |
+          rustup target add ${{ matrix.target }} || true
+
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.name }}" = "linux-x86_64" ]; then
+            cargo test --all --verbose
+          elif [ "${{ matrix.name }}" = "windows-x86_64" ]; then
+            cargo test --all --verbose
+          else
+            cross test --target ${{ matrix.target }} --verbose
+          fi
+
+      - name: Build release binaries
+        run: |
+          if [ "${{ matrix.name }}" = "linux-x86_64" ]; then
+            cargo build --release --verbose
+          elif [ "${{ matrix.name }}" = "windows-x86_64" ]; then
+            cargo build --release --verbose
+          else
+            cross build --target ${{ matrix.target }} --release --verbose
+          fi
+
+      - name: Build .deb (linux targets)
+        if: startsWith(matrix.target, 'x86_64-') || contains(matrix.target, 'unknown-linux') || contains(matrix.target, 'linux')
+        run: |
+          echo "Installing cargo-deb"
+          cargo install cargo-deb --locked || true
+          echo "Attempting to generate .deb for target=${{ matrix.target }}"
+          if [ "${{ matrix.name }}" = "linux-x86_64" ]; then
+            cargo deb --target ${{ matrix.target }} || cargo deb || true
+          else
+            cross run --target ${{ matrix.target }} -- cargo deb --no-build || true
+          fi
+          mkdir -p release-artifacts
+          if [ -d target/debian ]; then
+            for f in target/debian/*.deb; do
+              if [ -f "$f" ]; then
+                base=$(basename "$f")
+                cp "$f" "release-artifacts/${{ matrix.name }}-${base}"
+              fi
+            done
+          fi
+
+      - name: Package and upload artifact (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          OUT_DIR=release-artifacts
+          mkdir -p ${OUT_DIR}
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-gnu)
+              cp target/${{ matrix.target }}/release/sticks ${OUT_DIR}/sticks-linux-x86_64
+              chmod +x ${OUT_DIR}/sticks-linux-x86_64
+              ;;
+            aarch64-unknown-linux-gnu)
+              cp target/${{ matrix.target }}/release/sticks ${OUT_DIR}/sticks-linux-aarch64
+              chmod +x ${OUT_DIR}/sticks-linux-aarch64
+              ;;
+            i686-unknown-linux-gnu)
+              cp target/${{ matrix.target }}/release/sticks ${OUT_DIR}/sticks-linux-i686
+              chmod +x ${OUT_DIR}/sticks-linux-i686
+              ;;
+            x86_64-pc-windows-msvc)
+              cp target/${{ matrix.target }}/release/sticks.exe ${OUT_DIR}/sticks-windows-x86_64.exe || true
+              ;;
+          esac
+          # copy any generated debs into OUT_DIR (already copied in previous step, but ensure)
+          if [ -d target/debian ]; then
+            for f in target/debian/*.deb; do
+              if [ -f "$f" ]; then
+                cp "$f" "${OUT_DIR}/$(basename "$f")" || true
+              fi
+            done
+          fi
+          ls -la ${OUT_DIR}
+
+      - name: Upload release artifacts
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: sticks-${{ matrix.name }}-${{ github.ref_name }}
+          path: release-artifacts/**
+
