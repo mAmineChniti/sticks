@@ -23,7 +23,7 @@ jobs:
       version: ${{ steps.version.outputs.VERSION }}
       should_release: ${{ steps.check.outputs.SHOULD_RELEASE }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -75,7 +75,7 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -91,7 +91,7 @@ jobs:
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -110,7 +110,7 @@ jobs:
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -149,7 +149,7 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
