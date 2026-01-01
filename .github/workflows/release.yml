@@ -127,7 +127,7 @@ jobs:
         run: cargo deb
 
       - name: Upload .deb package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sticks-deb
           path: target/debian/*.deb
@@ -172,7 +172,7 @@ jobs:
           chmod +x sticks-linux-x86_64
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sticks-linux-x86_64
           path: sticks-linux-x86_64
