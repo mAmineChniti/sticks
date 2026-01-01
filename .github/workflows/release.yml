@@ -59,7 +59,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check.outputs.SHOULD_RELEASE == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: Release v${{ steps.version.outputs.VERSION }}
@@ -133,7 +133,7 @@ jobs:
           path: target/debian/*.deb
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
           files: target/debian/*.deb
@@ -178,7 +178,7 @@ jobs:
           path: sticks-linux-x86_64
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
           files: sticks-linux-x86_64
