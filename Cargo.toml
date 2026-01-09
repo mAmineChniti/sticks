@@ -16,7 +16,7 @@ dirs = "6.0"
 libc = "0.2"
 
 [dev-dependencies]
-serial_test = "3.2"
+serial_test = "3.3"
 
 [[bin]]
 name="sticks"
