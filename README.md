@@ -41,8 +41,14 @@
 - 🔀 **Git Integration** - Automatically initializes git repository when git is available
 - ⚡ **Command Aliases** - Short aliases for faster typing (f, add-pm, rm-pm, etc.)
 - 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
-- ✅ **Quality Assured** - Comprehensive test suite with 62 automated tests (100% coverage)
+- ✅ **Quality Assured** - Comprehensive test suite with 143 automated tests (100% coverage)
 - 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
+- ⚙️ **Advanced Build Config** - C++ standard, compiler flags, preprocessor definitions, include/library directories
+- 🧪 **Test Framework Integration** - GoogleTest, Catch2, Doctest support with automatic setup
+- 🔄 **CI/CD Generation** - GitHub Actions and GitLab CI pipeline templates
+- 🎯 **Multi-Target Support** - Executables, static libraries, shared libraries in one project
+- 📚 **Documentation Generation** - Doxygen and Sphinx configuration generation
+- 🔍 **Static Analysis Integration** - clang-tidy and cppcheck integration
 
 ## Installation
 
@@ -177,6 +183,10 @@ sticks a libcurl      # sticks add libcurl
 sticks r libcurl      # sticks remove libcurl
 sticks u              # sticks update
 sticks f              # sticks feature
+sticks cfg            # sticks config
+sticks t              # sticks test
+sticks tgt            # sticks target
+sticks l              # sticks lint
 ```
 
 #### Feature Subcommand Aliases
@@ -384,6 +394,150 @@ sticks f add-pm conan
 # View all features
 sticks f list
 ```
+
+## Advanced Build Configuration
+
+Sticks provides advanced C++ build configuration options:
+
+### Build Configuration
+
+Configure C++ standard, compiler flags, preprocessor definitions, and directories:
+
+```bash
+# Set C++ standard (applied immediately)
+sticks config set-cpp-standard 17
+
+# Add compiler flags (applied immediately)
+sticks config add-flag -Wall -O2
+
+# Add preprocessor definitions (applied immediately)
+sticks config add-def DEBUG VERSION=1.0
+
+# Add include directories (applied immediately)
+sticks config add-include include src
+
+# Add library directories (applied immediately)
+sticks config add-lib-dir lib /usr/local/lib
+
+# Remove items (applied immediately)
+sticks config remove-flag -Wall
+sticks config remove-def DEBUG
+```
+
+Note: All configuration changes are applied immediately to your build file (CMakeLists.txt or Makefile). No separate "apply" step is needed.
+
+### Test Framework Integration
+
+Add testing frameworks to your project:
+
+```bash
+# Add GoogleTest
+sticks test add gtest
+
+# Add Catch2
+sticks test add catch2
+
+# Add Doctest
+sticks test add doctest
+
+# Generate a test file template (optional framework parameter)
+sticks test generate my_project
+sticks test generate my_project --framework catch2
+```
+
+This automatically:
+- Adds `find_package()` directive to CMakeLists.txt
+- Enables testing with `enable_testing()`
+- Creates test executable target
+- Adds test dependencies
+- For Makefile: adds test target with proper linking
+
+### CI/CD Generation
+
+Generate CI/CD pipeline configurations:
+
+```bash
+# Generate GitHub Actions workflow
+sticks ci generate github
+
+# Generate GitLab CI configuration
+sticks ci generate gitlab
+
+# Write CI/CD configuration to file
+sticks ci write github
+sticks ci write gitlab
+```
+
+Generated pipelines include:
+- Build stage (cmake configuration and build)
+- Test stage (ctest execution)
+- Lint stage (clang-tidy for static analysis)
+
+### Multi-Target Projects
+
+Manage multiple build targets (executables, static libraries, shared libraries):
+
+```bash
+# Add executable target (applied immediately)
+sticks target add myapp --type exe -s src/main.cpp -d pthread
+
+# Add static library target (applied immediately)
+sticks target add mylib --type static -s src/lib.cpp
+
+# Add shared library target (applied immediately)
+sticks target add mylib --type shared -s src/lib.cpp -d pthread
+
+# List all targets (now implemented!)
+sticks target list
+```
+
+Note: Targets are added immediately to your build file (CMakeLists.txt or Makefile). Target removal requires modifying build files and is not yet implemented.
+
+### Documentation Generation
+
+Add documentation tools to your project:
+
+```bash
+# Add Doxygen
+sticks docs add doxygen
+
+# Add Sphinx
+sticks docs add sphinx
+
+# Generate documentation configuration (optional tool parameter)
+sticks docs generate my_project
+sticks docs generate my_project --tool sphinx
+
+# Write documentation configuration to file (optional tool parameter)
+sticks docs write my_project
+sticks docs write my_project --tool sphinx
+```
+
+### Static Analysis Integration
+
+Add static analysis tools for code quality:
+
+```bash
+# Add clang-tidy
+sticks lint add clang-tidy
+
+# Add cppcheck
+sticks lint add cppcheck
+
+# Generate static analysis configuration (optional tool parameter)
+sticks lint generate
+sticks lint generate --tool cppcheck
+
+# Write static analysis configuration to file (optional tool parameter)
+sticks lint write
+sticks lint write --tool cppcheck
+```
+
+This adds:
+- clang-tidy configuration (`.clang-tidy`)
+- cppcheck configuration (`cppcheck.xml`)
+- CMake integration with `find_program()`
+- Makefile integration with lint targets
 
 ### Generated Configuration Files
 

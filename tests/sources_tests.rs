@@ -23,10 +23,12 @@ fn test_add_sources_no_src_dir() {
 
 	let result = add_sources(&["utils"]);
 	assert!(result.is_err());
-	assert!(result
-		.unwrap_err()
-		.to_string()
-		.contains("src directory not found"));
+	assert!(
+		result
+			.unwrap_err()
+			.to_string()
+			.contains("src directory not found")
+	);
 
 	env::set_current_dir(&original_dir).unwrap();
 	fs::remove_dir_all(&temp_dir).ok();

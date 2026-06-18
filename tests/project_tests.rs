@@ -2,7 +2,7 @@ use serial_test::serial;
 use std::env;
 use std::fs;
 use std::path::Path;
-use sticks::{create_project, init_project, new_project, Language};
+use sticks::{Language, create_project, init_project, new_project};
 
 #[test]
 #[serial]

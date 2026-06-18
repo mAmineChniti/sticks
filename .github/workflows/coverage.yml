@@ -26,14 +26,14 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Generate coverage report
-        run: cargo tarpaulin --verbose --all-features --workspace --timeout 300 --out Xml --output-dir coverage
+        run: cargo tarpaulin --verbose --all-features --timeout 300 --out Xml --output-dir coverage --engine llvm
 
       - name: Display coverage summary
         run: |
           echo "📊 Code Coverage Report"
           echo "======================="
           if [ -f "./coverage/cobertura.xml" ]; then
-            cargo tarpaulin --verbose --all-features --workspace --timeout 300 --out Stdout
+            cargo tarpaulin --verbose --all-features --timeout 300 --out Stdout --engine llvm
           else
             echo "Coverage report not found"
           fi
