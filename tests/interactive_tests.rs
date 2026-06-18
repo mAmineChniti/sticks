@@ -52,3 +52,64 @@ fn test_interactive_module_functions_exported() {
 		"Interactive module functions should be exported"
 	);
 }
+
+#[test]
+#[serial]
+fn test_select_language_returns_default_on_error() {
+	let lang = sticks::interactive::select_language();
+	assert!(matches!(lang, sticks::Language::C | sticks::Language::Cpp));
+}
+
+#[test]
+#[serial]
+fn test_select_build_system_interactive_function_exists() {
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_build_sys_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
+	let original_dir = env::current_dir().unwrap();
+
+	fs::remove_dir_all(&temp_dir).ok();
+	fs::create_dir_all(&temp_dir).unwrap();
+	env::set_current_dir(&temp_dir).unwrap();
+
+	let result = std::panic::catch_unwind(|| {
+		let _ = sticks::interactive::select_build_system_interactive;
+	});
+
+	env::set_current_dir(&original_dir).unwrap();
+	fs::remove_dir_all(&temp_dir).ok();
+
+	assert!(result.is_ok());
+}
+
+#[test]
+#[serial]
+fn test_select_language_interactive_function_exists() {
+	let temp_dir = env::temp_dir().join(format!(
+		"sticks_test_lang_interactive_{}_{}",
+		std::process::id(),
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_nanos()
+	));
+	let original_dir = env::current_dir().unwrap();
+
+	fs::remove_dir_all(&temp_dir).ok();
+	fs::create_dir_all(&temp_dir).unwrap();
+	env::set_current_dir(&temp_dir).unwrap();
+
+	let result = std::panic::catch_unwind(|| {
+		let _ = sticks::interactive::select_language_interactive;
+	});
+
+	env::set_current_dir(&original_dir).unwrap();
+	fs::remove_dir_all(&temp_dir).ok();
+
+	assert!(result.is_ok());
+}

@@ -1,4 +1,5 @@
-use crate::languages::Language;
+use crate::{BuildSystem, languages::Language};
+use std::path::Path;
 
 pub fn generate_gitignore(language: Language) -> String {
 	match language {
@@ -16,7 +17,6 @@ pub fn generate_gitignore(language: Language) -> String {
 			CMakeFiles/\n\
 			CMakeCache.txt\n\
 			cmake_install.cmake\n\
-			Makefile\n\
 			\n\
 			# IDE\n\
 			.vscode/\n\
@@ -39,7 +39,7 @@ pub fn generate_gitignore(language: Language) -> String {
 			dist/\n\
 			\n\
 			# Testing\n\
-			test_*\n\
+			/test_*\n\
 			my_project/\n"
 			.to_string(),
 	}
@@ -112,6 +112,7 @@ pub fn generate_vscode_settings(language: Language) -> String {
 }
 
 pub fn generate_vscode_launch_config(project_name: &str) -> String {
+	let project_name = crate::project_build_name(project_name);
 	format!(
 		"{{\n\
 		\t\"version\": \"0.2.0\",\n\
@@ -143,31 +144,75 @@ pub fn generate_vscode_launch_config(project_name: &str) -> String {
 }
 
 pub fn generate_vscode_tasks_config() -> String {
-	"{\n\
-	\t\"version\": \"2.0.0\",\n\
-	\t\"tasks\": [\n\
-	\t\t{\n\
-	\t\t\t\"label\": \"build\",\n\
-	\t\t\t\"type\": \"shell\",\n\
-	\t\t\t\"command\": \"mkdir -p build bin && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .\",\n\
-	\t\t\t\"problemMatcher\": [\"$gcc\"],\n\
-	\t\t\t\"group\": {\n\
-	\t\t\t\t\"kind\": \"build\",\n\
-	\t\t\t\t\"isDefault\": true\n\
-	\t\t\t}\n\
-	\t\t},\n\
-	\t\t{\n\
-	\t\t\t\"label\": \"rebuild\",\n\
-	\t\t\t\"type\": \"shell\",\n\
-	\t\t\t\"command\": \"rm -rf build bin && mkdir -p build bin && cd build && cmake .. && cmake --build .\",\n\
-	\t\t\t\"problemMatcher\": [\"$gcc\"]\n\
-	\t\t}\n\
-	\t]\n\
-	}\n"
-		.to_string()
+	let build_system = if Path::new("CMakeLists.txt").is_file() {
+		BuildSystem::CMake
+	} else if ["Makefile", "makefile", "GNUmakefile"]
+		.iter()
+		.any(|name| Path::new(name).is_file())
+	{
+		BuildSystem::Makefile
+	} else {
+		BuildSystem::CMake
+	};
+
+	generate_vscode_tasks_config_for(build_system)
+}
+
+pub fn generate_vscode_tasks_config_for(build_system: BuildSystem) -> String {
+	match build_system {
+		BuildSystem::Makefile => "{\n\
+			\"version\": \"2.0.0\",\n\
+			\"tasks\": [\n\
+				{\n\
+					\"label\": \"build\",\n\
+					\"type\": \"process\",\n\
+					\"command\": \"make\",\n\
+					\"args\": [\"all\"],\n\
+					\"options\": {\"cwd\": \"${workspaceFolder}\"},\n\
+					\"problemMatcher\": [\"$gcc\"],\n\
+					\"group\": {\n\
+						\"kind\": \"build\",\n\
+						\"isDefault\": true\n\
+					}\n\
+				},\n\
+				{\n\
+					\"label\": \"rebuild\",\n\
+					\"type\": \"process\",\n\
+					\"command\": \"make\",\n\
+					\"args\": [\"rebuild\"],\n\
+					\"options\": {\"cwd\": \"${workspaceFolder}\"},\n\
+					\"problemMatcher\": [\"$gcc\"]\n\
+				}\n\
+			]\n\
+		}\n"
+		.to_string(),
+		BuildSystem::CMake => "{\n\
+			\"version\": \"2.0.0\",\n\
+			\"tasks\": [\n\
+				{\n\
+					\"label\": \"build\",\n\
+					\"type\": \"shell\",\n\
+					\"command\": \"mkdir -p build bin && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .\",\n\
+					\"problemMatcher\": [\"$gcc\"],\n\
+					\"group\": {\n\
+						\"kind\": \"build\",\n\
+						\"isDefault\": true\n\
+					}\n\
+				},\n\
+				{\n\
+					\"label\": \"rebuild\",\n\
+					\"type\": \"shell\",\n\
+					\"command\": \"rm -rf build bin && mkdir -p build bin && cd build && cmake .. && cmake --build .\",\n\
+					\"problemMatcher\": [\"$gcc\"]\n\
+				}\n\
+			]\n\
+		}\n"
+		.to_string(),
+	}
 }
 
 pub fn generate_readme(project_name: &str, language: Language) -> String {
+	let project_name = crate::project_build_name(project_name);
 	let lang_name = match language {
 		Language::C => "C",
 		Language::Cpp => "C++",
@@ -189,9 +234,9 @@ pub fn generate_readme(project_name: &str, language: Language) -> String {
 		make\n\
 		make run\n\
 		```\n\n\
-		### Using Make with Debug\n\
+		### Rebuilding\n\
 		```bash\n\
-		make debug\n\
+		make rebuild\n\
 		```\n\n\
 		## Project Structure\n\n\
 		```\n\
@@ -228,7 +273,7 @@ pub fn generate_precommit_hook() -> &'static str {
 	\n\
 	# Format check\n\
 	echo \"  Checking code formatting...\"\n\
-	find src -name '*.c' -o -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run -i\n\
+	find src -type f \\( -iname '*.c' -o -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' -o -iname '*.c++' -o -iname '*.h' -o -iname '*.hpp' \\) -exec clang-format --dry-run --Werror {} +\n\
 	\n\
 	echo \"  All checks passed!\"\n"
 }
@@ -237,7 +282,11 @@ pub fn generate_gitattributes() -> &'static str {
 	"* text=auto\n\
 	*.c text eol=lf\n\
 	*.cpp text eol=lf\n\
+	*.cc text eol=lf\n\
+	*.cxx text eol=lf\n\
+	*.c++ text eol=lf\n\
 	*.h text eol=lf\n\
+	*.hpp text eol=lf\n\
 	*.cmake text eol=lf\n\
 	Makefile text eol=lf\n\
 	CMakeLists.txt text eol=lf\n\

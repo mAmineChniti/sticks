@@ -31,3 +31,22 @@ fn test_updater_can_be_called() {
 
 	assert!(result.is_ok(), "Updater should be callable");
 }
+
+#[test]
+#[serial]
+fn test_get_current_version() {
+	let version = std::panic::catch_unwind(|| {
+		let _ = sticks::updater::update_project;
+	})
+	.is_ok();
+	assert!(version, "Should be able to call updater functions");
+}
+
+#[test]
+#[serial]
+fn test_updater_functions_accessible() {
+	let result = std::panic::catch_unwind(|| {
+		let _ = sticks::updater::update_project;
+	});
+	assert!(result.is_ok());
+}

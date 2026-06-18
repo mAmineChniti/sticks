@@ -84,6 +84,7 @@ impl PackageManagerGenerator for VcpkgGenerator {
 	}
 
 	fn generate_manifest(&self, project_name: &str) -> String {
+		let project_name = normalize_vcpkg_project_name(project_name);
 		format!(
 			"{{\n\
 			  \"name\": \"{}\",\n\
@@ -107,6 +108,25 @@ impl PackageManagerGenerator for VcpkgGenerator {
 		   -DCMAKE_TOOLCHAIN_FILE=./vcpkg/scripts/buildsystems/vcpkg.cmake"
 			.to_string()
 	}
+}
+
+fn normalize_vcpkg_project_name(value: &str) -> String {
+	let mut name = value.to_ascii_lowercase().replace('_', "-");
+	while name.contains("--") {
+		name = name.replace("--", "-");
+	}
+	name = name.trim_matches('-').to_string();
+	if name.is_empty() {
+		name = "project".to_string();
+	}
+	if name
+		.chars()
+		.next()
+		.is_some_and(|character| character.is_ascii_digit())
+	{
+		name = format!("project-{name}");
+	}
+	name
 }
 
 pub fn get_package_manager_generator(pm: PackageManager) -> Box<dyn PackageManagerGenerator> {

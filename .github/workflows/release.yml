@@ -144,43 +144,135 @@ jobs:
     name: Build Generic Linux Binary
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     needs: [check-version, test]
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, armv7-unknown-linux-gnueabihf]
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          target: x86_64-unknown-linux-gnu
+          target: ${{ matrix.target }}
+          cache: false
+
+      - name: Install cross-compilation tools
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+
+      - name: Configure linker for cross-compilation
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          elif [ "${{ matrix.target }}" = "armv7-unknown-linux-gnueabihf" ]; then
+            echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
+          fi
 
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target x86_64-unknown-linux-gnu
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Strip binary
-        run: strip target/x86_64-unknown-linux-gnu/release/sticks
+        run: |
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
+            strip target/${{ matrix.target }}/release/sticks
+          elif [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            aarch64-linux-gnu-strip target/${{ matrix.target }}/release/sticks
+          elif [ "${{ matrix.target }}" = "armv7-unknown-linux-gnueabihf" ]; then
+            arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/sticks
+          fi
 
       - name: Rename binary
         run: |
-          cp target/x86_64-unknown-linux-gnu/release/sticks sticks-linux-x86_64
-          chmod +x sticks-linux-x86_64
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
+            cp target/${{ matrix.target }}/release/sticks sticks-linux-x86_64
+          elif [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            cp target/${{ matrix.target }}/release/sticks sticks-linux-aarch64
+          elif [ "${{ matrix.target }}" = "armv7-unknown-linux-gnueabihf" ]; then
+            cp target/${{ matrix.target }}/release/sticks sticks-linux-armv7
+          fi
+          chmod +x sticks-linux-*
 
       - name: Upload binary
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: sticks-linux-x86_64
-          path: sticks-linux-x86_64
+          name: sticks-linux-${{ matrix.target }}
+          path: sticks-linux-*
+
+  build-windows:
+    name: Build Windows Binary
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    needs: [check-version, test]
+    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          cache: false
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        run: |
+          if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
+            cp target/${{ matrix.target }}/release/sticks.exe sticks-windows-x86_64.exe
+          elif [ "${{ matrix.target }}" = "aarch64-pc-windows-msvc" ]; then
+            cp target/${{ matrix.target }}/release/sticks.exe sticks-windows-aarch64.exe
+          fi
+        shell: bash
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: sticks-windows-${{ matrix.target }}
+          path: sticks-windows-*.exe
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [check-version, build-deb, build-binary, build-windows]
+    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sticks-linux-*
+          path: ./artifacts
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sticks-windows-*
+          path: ./artifacts
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ needs.check-version.outputs.version }}
-          files: sticks-linux-x86_64
+          tag_name: ${{ github.event_name == 'release' && github.event.release.tag_name || format('v{0}', needs.check-version.outputs.version) }}
+          files: ./artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

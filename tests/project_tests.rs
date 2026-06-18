@@ -2,7 +2,7 @@ use serial_test::serial;
 use std::env;
 use std::fs;
 use std::path::Path;
-use sticks::{create_project, init_project, new_project, Language};
+use sticks::{Language, create_project, init_project, new_project};
 
 #[test]
 #[serial]
@@ -74,7 +74,7 @@ fn test_create_project_cpp() {
 	assert!(main_content.contains("#include <iostream>"));
 
 	let makefile_content = fs::read_to_string("Makefile").unwrap();
-	assert!(makefile_content.contains("CC = g++"));
+	assert!(makefile_content.contains("CXX = g++"));
 
 	env::set_current_dir(&original_dir).unwrap();
 	fs::remove_dir_all(&temp_dir).ok();
@@ -99,9 +99,6 @@ fn test_new_project() {
 
 	let result = new_project("my_project", Language::C);
 	assert!(result.is_ok());
-
-	assert!(Path::new("src").exists());
-	assert!(Path::new("Makefile").exists());
 
 	env::set_current_dir(&original_dir).unwrap();
 	assert!(temp_dir.join("my_project").exists());

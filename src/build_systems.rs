@@ -61,9 +61,10 @@ impl BuildSystemGenerator for CMakeGenerator {
 	}
 
 	fn generate_build_file(&self, language: Language, project_name: &str) -> String {
+		let project_name = crate::project_build_name(project_name);
 		match language {
 			Language::C => format!(
-				"cmake_minimum_required(VERSION 3.15)\n\
+				"cmake_minimum_required(VERSION 3.21)\n\
 				project({} C)\n\
 				\n\
 				set(CMAKE_C_STANDARD 11)\n\
@@ -71,7 +72,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 				set(CMAKE_C_FLAGS \"${{CMAKE_C_FLAGS}} -Wall -Wextra -Werror\")\n\
 				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
 				\n\
-				file(GLOB_RECURSE SOURCES \"src/*.c\")\n\
+				file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS \"src/*.c\")\n\
 				\n\
 				add_executable(${{PROJECT_NAME}} ${{SOURCES}})\n\
 				target_include_directories(${{PROJECT_NAME}} PRIVATE \"${{CMAKE_CURRENT_SOURCE_DIR}}/include\")\n\
@@ -81,7 +82,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 				project_name
 			),
 			Language::Cpp => format!(
-				"cmake_minimum_required(VERSION 3.15)\n\
+				"cmake_minimum_required(VERSION 3.21)\n\
 				project({} CXX)\n\
 				\n\
 				set(CMAKE_CXX_STANDARD 17)\n\
@@ -89,7 +90,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 				set(CMAKE_CXX_FLAGS \"${{CMAKE_CXX_FLAGS}} -Wall -Wextra -Werror\")\n\
 				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
 				\n\
-				file(GLOB_RECURSE SOURCES \"src/*.cpp\")\n\
+				file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS \"src/*.cpp\" \"src/*.cc\" \"src/*.cxx\" \"src/*.c++\" \"src/*.C\" \"src/*.CPP\" \"src/*.CC\" \"src/*.CXX\")\n\
 				\n\
 				add_executable(${{PROJECT_NAME}} ${{SOURCES}})\n\
 				target_include_directories(${{PROJECT_NAME}} PRIVATE \"${{CMAKE_CURRENT_SOURCE_DIR}}/include\")\n\
@@ -115,26 +116,24 @@ pub fn get_generator(build_system: BuildSystem) -> Box<dyn BuildSystemGenerator>
 
 pub fn generate_cmake_build_script() -> &'static str {
 	"#!/bin/bash\n\
-	\n\
-	set -e\n\
-	\n\
-	mkdir -p build\n\
-	cd build\n\
-	cmake -DCMAKE_BUILD_TYPE=Release ..\n\
-	cmake --build .\n\
-	\n\
-	echo \"Build complete. Run ./build/$(basename $(pwd)/../) to execute.\"\n"
+set -e\n\
+\n\
+project_name=\"$(basename \"$PWD\")\"\n\
+mkdir -p build bin\n\
+cd build\n\
+cmake -DCMAKE_BUILD_TYPE=Release ..\n\
+cmake --build .\n\
+echo \"Build complete. Run ./bin/$project_name to execute.\"\n"
 }
 
 pub fn generate_cmake_debug_script() -> &'static str {
 	"#!/bin/bash\n\
-	\n\
-	set -e\n\
-	\n\
-	mkdir -p build-debug\n\
-	cd build-debug\n\
-	cmake -DCMAKE_BUILD_TYPE=Debug ..\n\
-	cmake --build .\n\
-	\n\
-	echo \"Debug build complete. Run ./build-debug/$(basename $(pwd)/../) to execute.\"\n"
+set -e\n\
+\n\
+project_name=\"$(basename \"$PWD\")\"\n\
+mkdir -p build-debug bin\n\
+cd build-debug\n\
+cmake -DCMAKE_BUILD_TYPE=Debug ..\n\
+cmake --build .\n\
+echo \"Debug build complete. Run ./bin/$project_name to execute.\"\n"
 }
