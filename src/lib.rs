@@ -1,19 +1,37 @@
+pub mod build_config;
 pub mod build_systems;
+pub mod ci_cd;
+pub mod cmake_dependencies;
 pub mod constants;
 pub mod dependencies;
+pub mod dependency_manager;
+pub mod docs;
 pub mod features;
 mod file_handler;
 pub mod interactive;
 pub mod languages;
+pub mod makefile_parser;
+pub mod multi_target;
+pub mod os_detect;
+pub mod package_checker;
 pub mod package_managers;
 pub mod sources;
+pub mod static_analysis;
 pub mod templates;
+pub mod test_framework;
 pub mod updater;
 
-pub use build_systems::{
-	get_generator, BuildSystem, BuildSystemGenerator, CMakeGenerator, MakefileGenerator,
+pub use build_config::{
+	BuildConfig, CompilerFlags, CppStandard, IncludeDirs, LibraryDirs, PreprocessorDefs,
 };
+pub use build_systems::{
+	BuildSystem, BuildSystemGenerator, CMakeGenerator, MakefileGenerator, get_generator,
+};
+pub use ci_cd::{CiCdGenerator, CiPlatform};
+pub use cmake_dependencies::CMakeDependencyManager;
 pub use dependencies::{add_dependencies, remove_dependencies};
+pub use dependency_manager::DependencyManager;
+pub use docs::{DocGenerator, DocTool};
 pub use features::{
 	add_package_manager_to_project, convert_build_system, convert_build_system_interactive,
 	detect_build_system, detect_package_manager, list_features,
@@ -21,11 +39,15 @@ pub use features::{
 };
 pub use file_handler::create_dir;
 pub use languages::{Language, LanguageConsts};
+pub use makefile_parser::Makefile;
+pub use multi_target::{BuildTarget, MultiTargetManager, TargetType};
 pub use package_managers::{
-	get_package_manager_generator, PackageManager, PackageManagerGenerator,
+	PackageManager, PackageManagerGenerator, get_package_manager_generator,
 };
 pub use sources::add_sources;
+pub use static_analysis::{StaticAnalysisGenerator, StaticAnalysisTool};
 pub use templates::*;
+pub use test_framework::{TestFramework, TestFrameworkManager};
 pub use updater::update_project;
 
 use anyhow::{Context, Result};

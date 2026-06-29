@@ -1,4 +1,4 @@
-use sticks::{get_package_manager_generator, PackageManager};
+use sticks::{PackageManager, get_package_manager_generator};
 
 #[test]
 fn test_package_manager_display() {

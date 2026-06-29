@@ -2,7 +2,7 @@ use serial_test::serial;
 use std::env;
 use std::fs;
 use std::path::Path;
-use sticks::{add_package_manager_to_project, detect_package_manager, PackageManager};
+use sticks::{PackageManager, add_package_manager_to_project, detect_package_manager};
 use sticks::{convert_build_system, detect_build_system};
 
 #[test]

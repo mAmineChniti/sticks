@@ -7,12 +7,20 @@ use std::process::Command;
 
 use crate::constants::{github, install_paths};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+enum Os {
+	Linux,
+	Windows,
+	Unknown,
+}
+
 fn get_install_path() -> Result<PathBuf> {
-	if let Ok(output) = Command::new("which").arg("sticks").output() {
-		if output.status.success() {
-			let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-			return Ok(PathBuf::from(path));
-		}
+	if let Ok(output) = Command::new("which").arg("sticks").output()
+		&& output.status.success()
+	{
+		let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+		return Ok(PathBuf::from(path));
 	}
 
 	let paths = vec![
@@ -32,10 +40,23 @@ fn get_install_path() -> Result<PathBuf> {
 	anyhow::bail!("Could not determine sticks installation path")
 }
 
+fn get_os() -> Os {
+	#[cfg(target_os = "linux")]
+	return Os::Linux;
+	#[cfg(target_os = "windows")]
+	return Os::Windows;
+	#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+	return Os::Unknown;
+}
+
 fn get_architecture() -> &'static str {
 	#[cfg(target_arch = "x86_64")]
 	return "x86_64";
-	#[cfg(not(target_arch = "x86_64"))]
+	#[cfg(target_arch = "aarch64")]
+	return "aarch64";
+	#[cfg(target_arch = "arm")]
+	return "armv7";
+	#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "arm")))]
 	return "unsupported";
 }
 
@@ -91,27 +112,18 @@ pub fn update_project() -> Result<()> {
 	println!("🔄 Checking for updates...");
 
 	let current_version = get_current_version();
+	let os = get_os();
 	let arch = get_architecture();
+
 	if arch == "unsupported" {
-		anyhow::bail!(
-			"Unsupported architecture: only x86_64 is supported. Please update manually."
-		);
+		anyhow::bail!("Unsupported architecture. Please update manually.");
+	}
+
+	if os == Os::Unknown {
+		anyhow::bail!("Unsupported operating system. Please update manually.");
 	}
 
 	let install_path = get_install_path()?;
-	let is_system_install =
-		install_path.starts_with("/usr/bin") || install_path.starts_with("/usr/local/bin");
-
-	let is_aur_install = PathBuf::from("/usr/bin/sticks").exists()
-		&& Command::new("pacman")
-			.arg("-Qi")
-			.arg("sticks-aur")
-			.output()
-			.map(|o| o.status.success())
-			.unwrap_or(false);
-
-	let is_deb_install = PathBuf::from("/usr/bin/dpkg").exists();
-
 	let latest_version = get_latest_version().context("Failed to check for updates")?;
 
 	if current_version == latest_version {
@@ -127,87 +139,171 @@ pub fn update_project() -> Result<()> {
 		current_version, latest_version
 	);
 
-	if is_system_install && is_aur_install {
-		println!();
-		println!("ℹ️  AUR installation detected.");
-		println!("📦 Please use your AUR helper to update:");
-		println!();
-		println!("  yay -Syu sticks-aur");
-		println!("  paru -Syu sticks-aur");
-		println!();
-		println!("💡 Or manually update:");
-		println!("  cd sticks-aur && git pull && makepkg -si");
-		return Ok(());
-	}
+	// Handle platform-specific installation methods
+	match os {
+		Os::Linux => {
+			let is_system_install =
+				install_path.starts_with("/usr/bin") || install_path.starts_with("/usr/local/bin");
 
-	if is_system_install && is_deb_install {
-		println!();
-		println!(
-			"📥 Downloading .deb package v{} from GitHub releases...",
-			latest_version
-		);
+			let is_aur_install = PathBuf::from("/usr/bin/sticks").exists()
+				&& Command::new("pacman")
+					.arg("-Qi")
+					.arg("sticks-aur")
+					.output()
+					.map(|o| o.status.success())
+					.unwrap_or(false);
 
-		let temp_dir = env::temp_dir().join(format!("sticks-update-{}", std::process::id()));
-		fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
+			let is_deb_install = PathBuf::from("/usr/bin/dpkg").exists();
 
-		let deb_name = format!("sticks_{}-1_amd64.deb", latest_version);
-		let download_url = format!("{}/{}", github::RELEASE_DOWNLOAD_URL, deb_name);
-		let temp_deb = temp_dir.join(&deb_name);
+			if is_system_install && is_aur_install {
+				println!();
+				println!("ℹ️  AUR installation detected.");
+				println!("📦 Please use your AUR helper to update:");
+				println!();
+				println!("  yay -Syu sticks-aur");
+				println!("  paru -Syu sticks-aur");
+				println!();
+				println!("💡 Or manually update:");
+				println!("  cd sticks-aur && git pull && makepkg -si");
+				return Ok(());
+			}
 
-		let status = if Command::new("wget2").arg("--version").output().is_ok() {
-			Command::new("wget2")
-				.args(["-c", "-O"])
-				.arg(&temp_deb)
-				.arg(&download_url)
-				.status()
-				.context("Failed to download .deb package with wget2")
-		} else if Command::new("wget").arg("--version").output().is_ok() {
-			Command::new("wget")
-				.args(["-c", "-O"])
-				.arg(&temp_deb)
-				.arg(&download_url)
-				.status()
-				.context("Failed to download .deb package with wget")
-		} else {
-			Command::new("curl")
-				.args(["-L", "-C", "-", "-o"])
-				.arg(&temp_deb)
-				.arg(&download_url)
-				.status()
-				.context("Failed to download .deb package. Is curl, wget, or wget2 installed?")
-		}?;
+			if is_system_install && is_deb_install {
+				println!();
+				println!(
+					"📥 Downloading .deb package v{} from GitHub releases...",
+					latest_version
+				);
 
-		if !status.success() {
-			fs::remove_dir_all(&temp_dir).ok();
-			anyhow::bail!(
-				"Failed to download .deb package from {}. \
-				Please check your internet connection or download manually.",
-				download_url
+				let temp_dir =
+					env::temp_dir().join(format!("sticks-update-{}", std::process::id()));
+				fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
+
+				let arch = std::env::consts::ARCH;
+				let deb_name = format!("sticks_{}-1_{}.deb", latest_version, arch);
+				let download_url = format!("{}/{}", github::RELEASE_DOWNLOAD_URL, deb_name);
+				let temp_deb = temp_dir.join(&deb_name);
+
+				let status = if Command::new("wget2").arg("--version").output().is_ok() {
+					Command::new("wget2")
+						.args(["-c", "-O"])
+						.arg(&temp_deb)
+						.arg(&download_url)
+						.status()
+						.context("Failed to download .deb package with wget2")
+				} else if Command::new("wget").arg("--version").output().is_ok() {
+					Command::new("wget")
+						.args(["-c", "-O"])
+						.arg(&temp_deb)
+						.arg(&download_url)
+						.status()
+						.context("Failed to download .deb package with wget")
+				} else {
+					Command::new("curl")
+						.args(["-L", "-C", "-", "-o"])
+						.arg(&temp_deb)
+						.arg(&download_url)
+						.status()
+						.context(
+							"Failed to download .deb package. Is curl, wget, or wget2 installed?",
+						)
+				}?;
+
+				if !status.success() {
+					fs::remove_dir_all(&temp_dir).ok();
+					anyhow::bail!(
+						"Failed to download .deb package from {}. \
+						Please check your internet connection or download manually.",
+						download_url
+					);
+				}
+
+				println!("📦 Installing .deb package (requires sudo)...");
+				let install_status = Command::new("sudo")
+					.args(["dpkg", "-i"])
+					.arg(&temp_deb)
+					.status()
+					.context("Failed to install .deb package")?;
+
+				fs::remove_dir_all(&temp_dir).ok();
+
+				if !install_status.success() {
+					anyhow::bail!(
+						"Failed to install .deb package. You may need to run 'sudo apt --fix-broken install'"
+					);
+				}
+
+				println!();
+				println!(
+					"✓ Successfully upgraded from v{} to v{}!",
+					current_version, latest_version
+				);
+				println!("💡 Run 'sticks --version' to verify the installation.");
+				return Ok(());
+			}
+		}
+		Os::Windows => {
+			println!();
+			println!("ℹ️  Windows installation detected.");
+			println!(
+				"� Downloading Windows binary v{} from GitHub releases...",
+				latest_version
 			);
+
+			let temp_dir = env::temp_dir().join(format!("sticks-update-{}", std::process::id()));
+			fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
+
+			let binary_name = format!("sticks-windows-{}.exe", arch);
+			let download_url = format!("{}/{}", github::RELEASE_DOWNLOAD_URL, binary_name);
+			let temp_binary = temp_dir.join("sticks.exe");
+
+			let status = Command::new("curl")
+				.args([
+					"-L",
+					"-f",
+					"-o",
+					temp_binary
+						.to_str()
+						.ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in temp binary path"))?,
+					&download_url,
+				])
+				.status()
+				.context("Failed to download update. Is curl installed?")?;
+
+			if !status.success() {
+				fs::remove_dir_all(&temp_dir).ok();
+				anyhow::bail!(
+					"Failed to download update from {}. \
+					Please check your internet connection or download manually.",
+					download_url
+				);
+			}
+
+			// On Windows, we need to replace the binary in the installation directory
+			// This typically requires administrator privileges
+			println!("📦 Installing Windows binary (may require administrator privileges)...");
+
+			// Copy to the installation path
+			fs::copy(&temp_binary, &install_path)
+				.with_context(|| format!("Failed to replace binary at {:?}", install_path))?;
+
+			fs::remove_dir_all(&temp_dir).ok();
+
+			println!();
+			println!(
+				"✓ Successfully upgraded from v{} to v{}!",
+				current_version, latest_version
+			);
+			println!("💡 Run 'sticks --version' to verify the installation.");
+			return Ok(());
 		}
-
-		println!("📦 Installing .deb package (requires sudo)...");
-		let install_status = Command::new("sudo")
-			.args(["dpkg", "-i"])
-			.arg(&temp_deb)
-			.status()
-			.context("Failed to install .deb package")?;
-
-		fs::remove_dir_all(&temp_dir).ok();
-
-		if !install_status.success() {
-			anyhow::bail!("Failed to install .deb package. You may need to run 'sudo apt --fix-broken install'");
+		_ => {
+			// This should never be reached due to the guard at lines 122-124
+			anyhow::bail!("Unsupported operating system. Please update manually.");
 		}
-
-		println!();
-		println!(
-			"✓ Successfully upgraded from v{} to v{}!",
-			current_version, latest_version
-		);
-		println!("💡 Run 'sticks --version' to verify the installation.");
-		return Ok(());
 	}
 
+	// Default binary download for Linux
 	println!("📥 Downloading v{} from GitHub releases...", latest_version);
 
 	let temp_dir = env::temp_dir().join(format!("sticks-update-{}", std::process::id()));
@@ -222,7 +318,9 @@ pub fn update_project() -> Result<()> {
 			"-L",
 			"-f",
 			"-o",
-			temp_binary.to_str().unwrap(),
+			temp_binary
+				.to_str()
+				.ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in temp binary path"))?,
 			&download_url,
 		])
 		.status()
