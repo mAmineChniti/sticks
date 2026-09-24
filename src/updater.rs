@@ -9,7 +9,9 @@ use std::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::constants::{github, install_paths};
+use crate::constants::github;
+#[cfg(unix)]
+use crate::constants::install_paths;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Os {
