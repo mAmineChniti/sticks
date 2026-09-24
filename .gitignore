@@ -17,7 +17,6 @@ packaging/src/
 /src/main.c
 /src/main.cpp
 /build/
-test_*
 my_project/
 existing_project/
 

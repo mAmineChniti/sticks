@@ -67,7 +67,7 @@ fn test_cmake_generator() {
 fn test_makefile_generator_cpp() {
 	let generator = MakefileGenerator;
 	let makefile = generator.generate_build_file(Language::Cpp, "my_cpp_project");
-	assert!(makefile.contains("CC = g++"));
+	assert!(makefile.contains("CXX = g++"));
 	assert!(makefile.contains("TARGET = $(BIN_DIR)/my_cpp_project"));
 	assert!(makefile.contains("BIN_DIR = bin"));
 	assert!(makefile.contains("*.cpp"));

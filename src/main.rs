@@ -1,7 +1,20 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
-use sticks::{add_dependencies, add_sources, remove_dependencies, update_project, Language};
+use sticks::{
+	Language, add_dependencies, add_sources,
+	build_config::{BuildConfig, CppStandard},
+	ci_cd::CiCdGenerator,
+	ci_cd::CiPlatform,
+	docs::DocGenerator,
+	docs::DocTool,
+	multi_target::{BuildTarget, MultiTargetManager, TargetType},
+	remove_dependencies,
+	static_analysis::StaticAnalysisGenerator,
+	static_analysis::StaticAnalysisTool,
+	test_framework::TestFrameworkManager,
+	update_project,
+};
 
 #[derive(Parser)]
 #[command(name = "sticks")]
@@ -64,15 +77,15 @@ enum Commands {
 		#[arg(long, short = 'p', help = "Package manager: 'conan' or 'vcpkg'")]
 		package_manager: Option<String>,
 	},
-	#[command(about = "Add dependencies to your project's Makefile")]
+	#[command(about = "Add dependencies to your project")]
 	#[command(
-		after_help = "Examples:\n  sticks add libcurl            # Add single dependency\n  sticks a libcurl openssl      # Add multiple dependencies\n  sticks add sqlite3 pthread    # Add libraries for C project"
+		after_help = "Examples:\n  sticks add libcurl            # Add single dependency\n  sticks a libcurl openssl      # Add multiple dependencies\n  sticks add sqlite3 pthread    # Add libraries for C project\n\nSupports: Makefile (via apt), CMake (via find_package), Conan, Vcpkg"
 	)]
 	#[command(visible_alias = "a")]
 	Add { dependency_name: Vec<String> },
-	#[command(about = "Remove dependencies from your project's Makefile")]
+	#[command(about = "Remove dependencies from your project")]
 	#[command(
-		after_help = "Examples:\n  sticks remove libcurl         # Remove single dependency\n  sticks r libcurl openssl      # Remove multiple dependencies\n  sticks remove sqlite3         # Remove library from project"
+		after_help = "Examples:\n  sticks remove libcurl         # Remove single dependency\n  sticks r libcurl openssl      # Remove multiple dependencies\n  sticks remove sqlite3         # Remove library from project\n\nSupports: Makefile (via apt), CMake (via find_package), Conan, Vcpkg"
 	)]
 	#[command(visible_alias = "r")]
 	Remove { dependency_name: Vec<String> },
@@ -94,12 +107,67 @@ enum Commands {
 		#[command(subcommand)]
 		action: FeatureAction,
 	},
+	#[command(about = "Configure build settings (C++ standard, compiler flags, etc.)")]
+	#[command(
+		after_help = "Examples:\n  sticks config set-cpp-standard 17    # Set C++ standard to 17\n  sticks config add-flag -Wall -O2     # Add compiler flags\n  sticks config add-def DEBUG          # Add preprocessor definition\n  sticks config add-include include     # Add include directory\n  sticks config add-lib-dir lib         # Add library directory"
+	)]
+	#[command(visible_alias = "cfg")]
+	Config {
+		#[command(subcommand)]
+		action: ConfigAction,
+	},
+	#[command(about = "Add test framework to project")]
+	#[command(
+		after_help = "Examples:\n  sticks test add gtest            # Add GoogleTest framework\n  sticks test add catch2           # Add Catch2 framework\n  sticks test add doctest          # Add Doctest framework"
+	)]
+	#[command(visible_alias = "t")]
+	Test {
+		#[command(subcommand)]
+		action: TestAction,
+	},
+	#[command(about = "Generate CI/CD configuration")]
+	#[command(
+		after_help = "Examples:\n  sticks ci generate github         # Generate GitHub Actions workflow\n  sticks ci generate gitlab          # Generate GitLab CI configuration"
+	)]
+	Ci {
+		#[command(subcommand)]
+		action: CiAction,
+	},
+	#[command(about = "Manage build targets (executables, libraries)")]
+	#[command(
+		after_help = "Examples:\n  sticks target add mylib --type static    # Add static library target\n  sticks target add myapp --type exe       # Add executable target\n  sticks target list                       # List all targets"
+	)]
+	#[command(visible_alias = "tgt")]
+	Target {
+		#[command(subcommand)]
+		action: TargetAction,
+	},
+	#[command(about = "Generate documentation configuration")]
+	#[command(
+		after_help = "Examples:\n  sticks docs add doxygen          # Add Doxygen documentation\n  sticks docs add sphinx            # Add Sphinx documentation"
+	)]
+	Docs {
+		#[command(subcommand)]
+		action: DocsAction,
+	},
+	#[command(about = "Add static analysis tools")]
+	#[command(
+		after_help = "Examples:\n  sticks lint add clang-tidy       # Add clang-tidy configuration\n  sticks lint add cppcheck          # Add cppcheck configuration"
+	)]
+	#[command(visible_alias = "l")]
+	Lint {
+		#[command(subcommand)]
+		action: LintAction,
+	},
 }
 
 #[derive(Subcommand)]
 enum FeatureAction {
 	#[command(about = "List detected project features")]
 	List,
+	#[command(about = "List project dependencies")]
+	#[command(visible_alias = "deps")]
+	Dependencies,
 	#[command(about = "Convert between build systems (makefile <-> cmake)")]
 	#[command(
 		after_help = "Examples:\n  sticks f convert cmake        # Convert current project to CMake\n  sticks f convert makefile     # Convert current project to Makefile\n  sticks f convert cmake myapp  # Convert specific project to CMake"
@@ -129,6 +197,134 @@ enum FeatureAction {
 	RemovePackageManager {
 		#[arg(value_parser = ["conan", "vcpkg"])]
 		package_manager: String,
+	},
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+	#[command(about = "Set C++ standard (11, 14, 17, 20, 23)")]
+	SetCppStandard {
+		#[arg(value_parser = ["11", "14", "17", "20", "23"])]
+		standard: String,
+	},
+	#[command(about = "Add compiler flags")]
+	AddFlag {
+		#[arg(allow_hyphen_values = true)]
+		flags: Vec<String>,
+	},
+	#[command(about = "Remove compiler flags")]
+	RemoveFlag {
+		#[arg(allow_hyphen_values = true)]
+		flags: Vec<String>,
+	},
+	#[command(about = "Add preprocessor definitions")]
+	AddDef {
+		#[arg(allow_hyphen_values = true)]
+		defs: Vec<String>,
+	},
+	#[command(about = "Remove preprocessor definitions")]
+	RemoveDef {
+		#[arg(allow_hyphen_values = true)]
+		defs: Vec<String>,
+	},
+	#[command(about = "Add include directories")]
+	AddInclude { dirs: Vec<String> },
+	#[command(about = "Remove include directories")]
+	RemoveInclude { dirs: Vec<String> },
+	#[command(about = "Add library directories")]
+	AddLibDir { dirs: Vec<String> },
+	#[command(about = "Remove library directories")]
+	RemoveLibDir { dirs: Vec<String> },
+	#[command(about = "Apply configuration to build files")]
+	Apply,
+}
+
+#[derive(Subcommand)]
+enum TestAction {
+	#[command(about = "Add test framework to project")]
+	Add {
+		#[arg(value_parser = ["gtest", "googletest", "catch2", "doctest"])]
+		framework: String,
+	},
+	#[command(about = "Generate test file")]
+	Generate {
+		project_name: String,
+		#[arg(long, value_parser = ["gtest", "googletest", "catch2", "doctest"])]
+		framework: Option<String>,
+	},
+}
+
+#[derive(Subcommand)]
+enum CiAction {
+	#[command(about = "Generate CI/CD configuration")]
+	Generate {
+		#[arg(value_parser = ["github", "gitlab"])]
+		platform: String,
+	},
+	#[command(about = "Write CI/CD configuration to file")]
+	Write {
+		#[arg(value_parser = ["github", "gitlab"])]
+		platform: String,
+	},
+}
+
+#[derive(Subcommand)]
+enum TargetAction {
+	#[command(about = "Add a build target")]
+	Add {
+		name: String,
+		#[arg(long = "type", short = 't', value_parser = ["exe", "executable", "static", "shared"])]
+		target_type: String,
+		#[arg(long, short)]
+		sources: Option<Vec<String>>,
+		#[arg(long, short, allow_hyphen_values = true)]
+		dependencies: Option<Vec<String>>,
+	},
+	#[command(about = "List all targets")]
+	List,
+	#[command(about = "Remove a target")]
+	Remove { name: String },
+	#[command(about = "Add targets to build files")]
+	Apply,
+}
+
+#[derive(Subcommand)]
+enum DocsAction {
+	#[command(about = "Add documentation tool")]
+	Add {
+		#[arg(value_parser = ["doxygen", "sphinx"])]
+		tool: String,
+	},
+	#[command(about = "Generate documentation configuration")]
+	Generate {
+		project_name: String,
+		#[arg(long, value_parser = ["doxygen", "sphinx"])]
+		tool: Option<String>,
+	},
+	#[command(about = "Write documentation configuration to file")]
+	Write {
+		project_name: String,
+		#[arg(long, value_parser = ["doxygen", "sphinx"])]
+		tool: Option<String>,
+	},
+}
+
+#[derive(Subcommand)]
+enum LintAction {
+	#[command(about = "Add static analysis tool")]
+	Add {
+		#[arg(value_parser = ["clang-tidy", "cppcheck"])]
+		tool: String,
+	},
+	#[command(about = "Generate static analysis configuration")]
+	Generate {
+		#[arg(long, value_parser = ["clang-tidy", "cppcheck"])]
+		tool: Option<String>,
+	},
+	#[command(about = "Write static analysis configuration to file")]
+	Write {
+		#[arg(long, value_parser = ["clang-tidy", "cppcheck"])]
+		tool: Option<String>,
 	},
 }
 
@@ -167,11 +363,11 @@ fn run() -> Result<()> {
 				match package_manager {
 					Some(ref pm_str) => {
 						let pm = pm_str.parse::<sticks::PackageManager>()?;
-						sticks::create_project_with_system_and_pm(
+						sticks::new_project_with_system_and_pm(
 							&name,
 							Language::C,
 							build_system,
-							pm,
+							Some(pm),
 						)?;
 					}
 					None => {
@@ -191,11 +387,11 @@ fn run() -> Result<()> {
 				match package_manager {
 					Some(ref pm_str) => {
 						let pm = pm_str.parse::<sticks::PackageManager>()?;
-						sticks::create_project_with_system_and_pm(
+						sticks::new_project_with_system_and_pm(
 							&name,
 							Language::Cpp,
 							build_system,
-							pm,
+							Some(pm),
 						)?;
 					}
 					None => {
@@ -211,7 +407,7 @@ fn run() -> Result<()> {
 		} => {
 			let lang = match language {
 				Some(l) => l.parse::<Language>()?,
-				None => sticks::interactive::select_language(),
+				None => sticks::interactive::select_language_result()?,
 			};
 			let build_system = build.parse::<sticks::BuildSystem>()?;
 			match package_manager {
@@ -249,6 +445,24 @@ fn run() -> Result<()> {
 		Commands::Feature { action } => {
 			handle_feature_action(action)?;
 		}
+		Commands::Config { action } => {
+			handle_config_action(action)?;
+		}
+		Commands::Test { action } => {
+			handle_test_action(action)?;
+		}
+		Commands::Ci { action } => {
+			handle_ci_action(action)?;
+		}
+		Commands::Target { action } => {
+			handle_target_action(action)?;
+		}
+		Commands::Docs { action } => {
+			handle_docs_action(action)?;
+		}
+		Commands::Lint { action } => {
+			handle_lint_action(action)?;
+		}
 	}
 
 	Ok(())
@@ -260,6 +474,9 @@ fn handle_feature_action(action: FeatureAction) -> Result<()> {
 	match action {
 		List => {
 			sticks::list_features()?;
+		}
+		Dependencies => {
+			sticks::DependencyManager::list()?;
 		}
 		Convert {
 			to_system,
@@ -302,6 +519,537 @@ fn handle_feature_action(action: FeatureAction) -> Result<()> {
 	Ok(())
 }
 
+fn handle_config_action(action: ConfigAction) -> Result<()> {
+	use ConfigAction::*;
+
+	let build_file = sticks::detect_build_file()?.ok_or_else(|| {
+		anyhow::anyhow!("No CMakeLists.txt or Makefile found in current directory")
+	})?;
+	let is_cmake = build_file
+		.file_name()
+		.is_some_and(|name| name == "CMakeLists.txt");
+	let cmake_path = if is_cmake {
+		build_file.as_path()
+	} else {
+		std::path::Path::new("CMakeLists.txt")
+	};
+	let makefile_path = if is_cmake {
+		std::path::Path::new("Makefile")
+	} else {
+		build_file.as_path()
+	};
+
+	if !cmake_path.exists() && !makefile_path.exists() {
+		anyhow::bail!("No CMakeLists.txt or Makefile found in current directory");
+	}
+
+	// Parse existing configuration
+	let mut config = if cmake_path.exists() {
+		BuildConfig::parse_from_cmake(cmake_path)?
+	} else {
+		BuildConfig::parse_from_makefile(makefile_path)?
+	};
+
+	match action {
+		SetCppStandard { standard } => {
+			let std = standard.parse::<CppStandard>()?;
+			config.set_cpp_standard(std);
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!("✓ Set C++ standard to {} in CMakeLists.txt", standard);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!("✓ Set C++ standard to {} in Makefile", standard);
+			}
+		}
+		AddFlag { flags } => {
+			if flags.is_empty() {
+				anyhow::bail!("Specify at least one compiler flag");
+			}
+			validate_config_values(&flags, "compiler flag")?;
+			for flag in &flags {
+				config.add_compiler_flag(flag);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Added compiler flags: {} to CMakeLists.txt",
+					flags.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!("✓ Added compiler flags: {} to Makefile", flags.join(", "));
+			}
+		}
+		RemoveFlag { flags } => {
+			if flags.is_empty() {
+				anyhow::bail!("Specify at least one compiler flag");
+			}
+			validate_config_values(&flags, "compiler flag")?;
+			for flag in &flags {
+				config.remove_compiler_flag(flag);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Removed compiler flags: {} from CMakeLists.txt",
+					flags.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!(
+					"✓ Removed compiler flags: {} from Makefile",
+					flags.join(", ")
+				);
+			}
+		}
+		AddDef { defs } => {
+			if defs.is_empty() {
+				anyhow::bail!("Specify at least one preprocessor definition");
+			}
+			validate_config_values(&defs, "preprocessor definition")?;
+			for def in &defs {
+				config.add_preprocessor_def(def);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Added preprocessor definitions: {} to CMakeLists.txt",
+					defs.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!(
+					"✓ Added preprocessor definitions: {} to Makefile",
+					defs.join(", ")
+				);
+			}
+		}
+		RemoveDef { defs } => {
+			if defs.is_empty() {
+				anyhow::bail!("Specify at least one preprocessor definition");
+			}
+			validate_config_values(&defs, "preprocessor definition")?;
+			for def in &defs {
+				config.remove_preprocessor_def(def);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Removed preprocessor definitions: {} from CMakeLists.txt",
+					defs.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!(
+					"✓ Removed preprocessor definitions: {} from Makefile",
+					defs.join(", ")
+				);
+			}
+		}
+		AddInclude { dirs } => {
+			if dirs.is_empty() {
+				anyhow::bail!("Specify at least one include directory");
+			}
+			validate_config_values(&dirs, "directory")?;
+			for dir in &dirs {
+				config.add_include_dir(dir);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Added include directories: {} to CMakeLists.txt",
+					dirs.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!(
+					"✓ Added include directories: {} to Makefile",
+					dirs.join(", ")
+				);
+			}
+		}
+		RemoveInclude { dirs } => {
+			if dirs.is_empty() {
+				anyhow::bail!("Specify at least one include directory");
+			}
+			validate_config_values(&dirs, "directory")?;
+			for dir in &dirs {
+				config.remove_include_dir(dir);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Removed include directories: {} from CMakeLists.txt",
+					dirs.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!(
+					"✓ Removed include directories: {} from Makefile",
+					dirs.join(", ")
+				);
+			}
+		}
+		AddLibDir { dirs } => {
+			if dirs.is_empty() {
+				anyhow::bail!("Specify at least one library directory");
+			}
+			validate_config_values(&dirs, "directory")?;
+			for dir in &dirs {
+				config.add_library_dir(dir);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Added library directories: {} to CMakeLists.txt",
+					dirs.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!(
+					"✓ Added library directories: {} to Makefile",
+					dirs.join(", ")
+				);
+			}
+		}
+		RemoveLibDir { dirs } => {
+			if dirs.is_empty() {
+				anyhow::bail!("Specify at least one library directory");
+			}
+			validate_config_values(&dirs, "directory")?;
+			for dir in &dirs {
+				config.remove_library_dir(dir);
+			}
+			if cmake_path.exists() {
+				config.apply_to_cmake(cmake_path)?;
+				println!(
+					"✓ Removed library directories: {} from CMakeLists.txt",
+					dirs.join(", ")
+				);
+			} else {
+				config.apply_to_makefile(makefile_path)?;
+				println!(
+					"✓ Removed library directories: {} from Makefile",
+					dirs.join(", ")
+				);
+			}
+		}
+		Apply => {
+			anyhow::bail!(
+				"Configuration is now applied automatically. Use individual config commands to modify settings."
+			);
+		}
+	}
+
+	Ok(())
+}
+
+fn handle_test_action(action: TestAction) -> Result<()> {
+	use TestAction::*;
+
+	match action {
+		Add { framework } => {
+			let fw = framework.parse::<sticks::test_framework::TestFramework>()?;
+			let manager = TestFrameworkManager::new(fw);
+
+			let (build_file, is_cmake) = current_build_file()?;
+			let project_name = std::env::current_dir()
+				.ok()
+				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+				.unwrap_or_else(|| "project".to_string());
+			let language = sticks::languages::Language::from_project_structure_with_prompt(false)?;
+			if language != sticks::Language::Cpp {
+				anyhow::bail!("Test framework integration currently requires a C++ project");
+			}
+			manager.setup_test_files(&project_name, "cpp")?;
+
+			if is_cmake {
+				manager.add_to_cmake(&build_file, &project_name)?;
+				println!("✓ Added {} to CMakeLists.txt", fw.as_str());
+			} else {
+				manager.add_to_makefile(&build_file, &project_name)?;
+				println!("✓ Added {} to Makefile", fw.as_str());
+			}
+		}
+		Generate {
+			project_name,
+			framework,
+		} => {
+			sticks::validate_project_name(&project_name)?;
+			let fw_str = framework.unwrap_or_else(|| "gtest".to_string());
+			let fw = fw_str.parse::<sticks::test_framework::TestFramework>()?;
+			let manager = TestFrameworkManager::new(fw);
+			manager.setup_test_files(&project_name, "cpp")?;
+			println!("Created tests/test_{}.cpp", project_name);
+		}
+	}
+
+	Ok(())
+}
+
+fn handle_ci_action(action: CiAction) -> Result<()> {
+	use CiAction::*;
+
+	match action {
+		Generate { platform } => {
+			let platform = platform.parse::<CiPlatform>()?;
+			let generator = CiCdGenerator::new(platform);
+			let project_name = std::env::current_dir()
+				.ok()
+				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+				.unwrap_or_else(|| "project".to_string());
+			let language = language_for_build()?;
+			let build_system = sticks::detect_build_system()?.unwrap_or(sticks::BuildSystem::CMake);
+			println!(
+				"{}",
+				generator.generate_for(&project_name, language, build_system)
+			);
+		}
+		Write { platform } => {
+			let platform = platform.parse::<CiPlatform>()?;
+			let generator = CiCdGenerator::new(platform);
+			let project_name = std::env::current_dir()
+				.ok()
+				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+				.unwrap_or_else(|| "project".to_string());
+			let language = language_for_build()?;
+			let build_system = sticks::detect_build_system()?.unwrap_or(sticks::BuildSystem::CMake);
+			generator.write_to_file_for(&project_name, language, build_system)?;
+			println!("Wrote CI/CD configuration for {}", platform.as_str());
+		}
+	}
+
+	Ok(())
+}
+
+fn handle_target_action(action: TargetAction) -> Result<()> {
+	use TargetAction::*;
+
+	let (build_file, is_cmake) = current_build_file()?;
+
+	match action {
+		Add {
+			name,
+			target_type,
+			sources,
+			dependencies,
+		} => {
+			let tt = target_type.parse::<TargetType>()?;
+			sticks::validate_project_name(&name)?;
+			let sources = sources.clone().unwrap_or_default();
+			if sources.is_empty() {
+				anyhow::bail!("Target '{}' must define at least one source", name);
+			}
+
+			// Parse existing targets
+			let mut manager = if is_cmake {
+				MultiTargetManager::parse_from_cmake(&build_file)?
+			} else {
+				MultiTargetManager::parse_from_makefile(&build_file)?
+			};
+
+			// Check if target already exists
+			if manager.get_target(&name).is_some() {
+				anyhow::bail!("Target '{}' already exists. Use a different name.", name);
+			}
+
+			let mut target = BuildTarget::new(name.clone(), tt);
+
+			for src in sources {
+				target.add_source(src);
+			}
+
+			if let Some(deps) = dependencies {
+				for dep in deps {
+					target.add_dependency(dep);
+				}
+			}
+
+			manager.add_target(target);
+
+			if is_cmake {
+				manager.add_to_cmake(&build_file)?;
+				println!(
+					"✓ Added target '{}' ({}) to CMakeLists.txt",
+					name,
+					tt.as_str()
+				);
+			} else {
+				manager.add_to_makefile(&build_file)?;
+				println!("✓ Added target '{}' ({}) to Makefile", name, tt.as_str());
+			}
+		}
+		List => {
+			let manager = if is_cmake {
+				MultiTargetManager::parse_from_cmake(&build_file)?
+			} else {
+				MultiTargetManager::parse_from_makefile(&build_file)?
+			};
+
+			if manager.targets.is_empty() {
+				println!("No targets found in build file.");
+			} else {
+				println!("Build targets:");
+				for target in &manager.targets {
+					println!("  - {} ({})", target.name, target.target_type.as_str());
+					if !target.sources.is_empty() {
+						println!("    Sources: {}", target.sources.join(", "));
+					}
+					if !target.dependencies.is_empty() {
+						println!("    Dependencies: {}", target.dependencies.join(", "));
+					}
+				}
+			}
+		}
+		Remove { name } => {
+			sticks::validate_project_name(&name)?;
+			let mut manager = if is_cmake {
+				MultiTargetManager::parse_from_cmake(&build_file)?
+			} else {
+				MultiTargetManager::parse_from_makefile(&build_file)?
+			};
+			manager.remove_target(&name)?;
+			if is_cmake {
+				manager.remove_from_cmake(&build_file, &name)?;
+			} else {
+				manager.remove_from_makefile(&build_file, &name)?;
+			}
+			println!("Removed target '{}'", name);
+		}
+		Apply => {
+			println!("Targets are applied automatically when added");
+		}
+	}
+
+	Ok(())
+}
+
+fn handle_docs_action(action: DocsAction) -> Result<()> {
+	use DocsAction::*;
+
+	match action {
+		Add { tool } => {
+			let tool = tool.parse::<DocTool>()?;
+			let generator = DocGenerator::new(tool);
+
+			let (build_file, is_cmake) = current_build_file()?;
+
+			let project_name = std::env::current_dir()
+				.ok()
+				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+				.unwrap_or_else(|| "project".to_string());
+			sticks::validate_project_name(&project_name)?;
+
+			if !documentation_config_exists(tool) {
+				generator.write_config(&project_name)?;
+			}
+			if is_cmake {
+				generator.add_to_cmake(&build_file, &project_name)?;
+				println!("✓ Added {} to CMakeLists.txt", tool.as_str());
+			} else {
+				generator.add_to_makefile(&build_file)?;
+				println!("✓ Added {} to Makefile", tool.as_str());
+			}
+		}
+		Generate { project_name, tool } => {
+			sticks::validate_project_name(&project_name)?;
+			let tool_str = tool.unwrap_or_else(|| "doxygen".to_string());
+			let tool = tool_str.parse::<DocTool>()?;
+			let generator = DocGenerator::new(tool);
+			let config = generator.generate_config(&project_name);
+			println!("{}", config);
+		}
+		Write { project_name, tool } => {
+			sticks::validate_project_name(&project_name)?;
+			let tool_str = tool.unwrap_or_else(|| "doxygen".to_string());
+			let tool = tool_str.parse::<DocTool>()?;
+			let generator = DocGenerator::new(tool);
+			generator.write_config(&project_name)?;
+			println!("✓ Wrote documentation configuration");
+		}
+	}
+
+	Ok(())
+}
+
+fn handle_lint_action(action: LintAction) -> Result<()> {
+	use LintAction::*;
+
+	match action {
+		Add { tool } => {
+			let tool = tool.parse::<StaticAnalysisTool>()?;
+			let generator = StaticAnalysisGenerator::new(tool);
+
+			let (build_file, is_cmake) = current_build_file()?;
+
+			if !lint_config_exists(tool) {
+				generator.write_config()?;
+			}
+			if is_cmake {
+				generator.add_to_cmake(&build_file)?;
+				println!("✓ Added {} to CMakeLists.txt", tool.as_str());
+			} else {
+				generator.add_to_makefile(&build_file)?;
+				println!("✓ Added {} to Makefile", tool.as_str());
+			}
+		}
+		Generate { tool } => {
+			let tool_str = tool.unwrap_or_else(|| "clang-tidy".to_string());
+			let tool = tool_str.parse::<StaticAnalysisTool>()?;
+			let generator = StaticAnalysisGenerator::new(tool);
+			let config = generator.generate_config();
+			println!("{}", config);
+		}
+		Write { tool } => {
+			let tool_str = tool.unwrap_or_else(|| "clang-tidy".to_string());
+			let tool = tool_str.parse::<StaticAnalysisTool>()?;
+			let generator = StaticAnalysisGenerator::new(tool);
+			generator.write_config()?;
+			println!("✓ Wrote static analysis configuration");
+		}
+	}
+
+	Ok(())
+}
+
+fn documentation_config_exists(tool: DocTool) -> bool {
+	match tool {
+		DocTool::Doxygen => std::path::Path::new("Doxyfile").is_file(),
+		DocTool::Sphinx => {
+			std::path::Path::new("docs/conf.py").is_file()
+				&& std::path::Path::new("docs/index.rst").is_file()
+				&& std::path::Path::new("Doxyfile").is_file()
+				&& std::path::Path::new("docs/requirements.txt").is_file()
+		}
+	}
+}
+
+fn lint_config_exists(tool: StaticAnalysisTool) -> bool {
+	match tool {
+		StaticAnalysisTool::ClangTidy => std::path::Path::new(".clang-tidy").is_file(),
+		StaticAnalysisTool::Cppcheck => std::path::Path::new("cppcheck.xml").is_file(),
+	}
+}
+
+fn current_build_file() -> Result<(std::path::PathBuf, bool)> {
+	let path = sticks::detect_build_file()?.ok_or_else(|| {
+		anyhow::anyhow!("No CMakeLists.txt or Makefile found in current directory")
+	})?;
+	let is_cmake = path
+		.file_name()
+		.is_some_and(|name| name == "CMakeLists.txt");
+	Ok((path, is_cmake))
+}
+
+fn language_for_build() -> Result<&'static str> {
+	let language = sticks::languages::Language::from_project_structure_with_prompt(false)?;
+	Ok(match language {
+		Language::C => "c",
+		Language::Cpp => "cpp",
+	})
+}
+
 fn handle_shortcuts(args: Vec<String>) -> Vec<String> {
 	if args.len() < 2 {
 		return args;
@@ -316,6 +1064,11 @@ fn handle_shortcuts(args: Vec<String>) -> Vec<String> {
 		"a" => "add",
 		"r" => "remove",
 		"u" => "update",
+		"f" => "feature",
+		"cfg" => "config",
+		"t" => "test",
+		"tgt" => "target",
+		"l" => "lint",
 		_ => return args,
 	};
 
@@ -324,28 +1077,29 @@ fn handle_shortcuts(args: Vec<String>) -> Vec<String> {
 	new_args
 }
 
+fn validate_config_values(values: &[String], kind: &str) -> Result<()> {
+	for value in values {
+		if value.is_empty()
+			|| value.chars().any(|character| {
+				character.is_control()
+					|| character.is_whitespace()
+					|| matches!(
+						character,
+						'"' | '\'' | ';' | '`' | '\\' | '$' | '|' | '&' | '>' | '<'
+					)
+			}) {
+			anyhow::bail!("Invalid {}: {}", kind, value);
+		}
+	}
+	Ok(())
+}
+
 fn validate_project_names(names: &[String]) -> Result<()> {
 	if names.is_empty() {
 		anyhow::bail!("Please specify at least one project name");
 	}
-
 	for name in names {
-		if name.is_empty() {
-			anyhow::bail!("Project name cannot be empty");
-		}
-		if name.starts_with('-') {
-			anyhow::bail!("Project name cannot start with '-': {}", name);
-		}
-		if !name
-			.chars()
-			.all(|c| c.is_alphanumeric() || c == '_' || c == '-')
-		{
-			anyhow::bail!(
-				"Project name can only contain alphanumeric characters, '-', or '_': {}",
-				name
-			);
-		}
+		sticks::validate_project_name(name)?;
 	}
-
 	Ok(())
 }

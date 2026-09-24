@@ -23,10 +23,12 @@ fn test_add_sources_no_src_dir() {
 
 	let result = add_sources(&["utils"]);
 	assert!(result.is_err());
-	assert!(result
-		.unwrap_err()
-		.to_string()
-		.contains("src directory not found"));
+	assert!(
+		result
+			.unwrap_err()
+			.to_string()
+			.contains("src directory not found")
+	);
 
 	env::set_current_dir(&original_dir).unwrap();
 	fs::remove_dir_all(&temp_dir).ok();
@@ -59,19 +61,19 @@ fn test_add_sources_success() {
 		"src/utils.c should exist"
 	);
 	assert!(
-		Path::new("src/utils.h").exists(),
-		"src/utils.h should exist"
+		Path::new("include/utils.h").exists(),
+		"include/utils.h should exist"
 	);
 	assert!(
 		Path::new("src/network.c").exists(),
 		"src/network.c should exist"
 	);
 	assert!(
-		Path::new("src/network.h").exists(),
-		"src/network.h should exist"
+		Path::new("include/network.h").exists(),
+		"include/network.h should exist"
 	);
 
-	let header_content = fs::read_to_string("src/utils.h").unwrap();
+	let header_content = fs::read_to_string("include/utils.h").unwrap();
 	assert!(header_content.contains("#ifndef UTILS_H"));
 	assert!(header_content.contains("#define UTILS_H"));
 	assert!(header_content.contains("#endif"));

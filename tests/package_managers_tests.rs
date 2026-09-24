@@ -1,4 +1,4 @@
-use sticks::{get_package_manager_generator, PackageManager};
+use sticks::{PackageManager, get_package_manager_generator};
 
 #[test]
 fn test_package_manager_display() {
@@ -65,7 +65,7 @@ fn test_vcpkg_generator() {
 	assert_eq!(generator.extension(), "vcpkg.json");
 
 	let manifest = generator.generate_manifest("my_project");
-	assert!(manifest.contains("\"name\": \"my_project\""));
+	assert!(manifest.contains("\"name\": \"my-project\""));
 	assert!(manifest.contains("\"version\": \"0.1.0\""));
 	assert!(manifest.contains("\"dependencies\""));
 }
@@ -97,5 +97,5 @@ fn test_vcpkg_manifest_structure() {
 	assert!(manifest.contains("{"));
 	assert!(manifest.contains("}"));
 	assert!(manifest.contains("\"name\""));
-	assert!(manifest.contains("test_app"));
+	assert!(manifest.contains("test-app"));
 }
