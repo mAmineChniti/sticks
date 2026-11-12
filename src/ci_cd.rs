@@ -59,12 +59,14 @@ impl CiCdGenerator {
 		let package_setup = package_manager_setup();
 		let cmake_configure = cmake_configure_command();
 		let test_configuration = detect_test_configuration(build_system);
-		let test_install = test_framework_packages(&test_configuration.frameworks);
-		let github_test_install = github_test_install_step(&test_install);
+		let github_test_install = github_test_install_snippet(&test_configuration.frameworks);
 		let github_test_step = github_test_step(build_system, &test_configuration);
-		let gitlab_test_install = gitlab_test_install_step(&test_install);
+		let gitlab_test_install = gitlab_test_install_snippet(&test_configuration.frameworks);
 		let gitlab_test_step = gitlab_test_step(build_system, &test_configuration);
 		let clang_tidy = clang_tidy_command(build_system, language);
+		let cmake_tools = distro_install_snippet(&build_tool_packages(true, true));
+		let make_tools = distro_install_snippet(&build_tool_packages(false, false));
+		let tidy_only = distro_install_snippet(&build_tool_packages(false, true));
 		match (self.platform, build_system) {
 			(CiPlatform::GitHubActions, BuildSystem::CMake) => format!(
 				r#"name: CI
@@ -81,7 +83,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install build tools
-      run: sudo apt-get update && sudo apt-get install -y cmake make gcc g++ clang-tidy python3-venv
+      run: {cmake_tools}
 {github_test_install}    - name: Install project dependencies
       run: |
         {package_setup}
@@ -94,7 +96,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install clang-tidy
-      run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      run: {tidy_only}
 {github_test_install}    - name: Configure build context
       run: |
         {package_setup}
@@ -107,7 +109,9 @@ jobs:
 				cmake_configure = cmake_configure,
 				github_test_install = github_test_install,
 				github_test_step = github_test_step,
-				clang_tidy = clang_tidy
+				clang_tidy = clang_tidy,
+				cmake_tools = cmake_tools,
+				tidy_only = tidy_only,
 			),
 			(CiPlatform::GitHubActions, BuildSystem::Makefile) => format!(
 				r#"name: CI
@@ -124,7 +128,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install build tools
-      run: sudo apt-get update && sudo apt-get install -y make gcc g++ python3-venv
+      run: {make_tools}
 {github_test_install}    - name: Install project dependencies
       run: |
         {package_setup}
@@ -137,7 +141,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install clang-tidy
-      run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      run: {tidy_only}
     - name: Run clang-tidy
       run: |
         {clang_tidy}
@@ -145,7 +149,9 @@ jobs:
 				package_setup = package_setup,
 				github_test_install = github_test_install,
 				github_test_step = github_test_step,
-				clang_tidy = clang_tidy
+				clang_tidy = clang_tidy,
+				make_tools = make_tools,
+				tidy_only = tidy_only,
 			),
 			(CiPlatform::GitLabCI, BuildSystem::CMake) => format!(
 				r#"image: ubuntu:latest
@@ -155,7 +161,7 @@ stages:
   - lint
 
 before_script:
-  - apt-get update && apt-get install -y cmake make gcc g++ clang-tidy python3-venv
+  - {cmake_tools}
 
 build:
   stage: build
@@ -181,7 +187,8 @@ lint:
 				cmake_configure = cmake_configure,
 				gitlab_test_install = gitlab_test_install,
 				gitlab_test_step = gitlab_test_step,
-				clang_tidy = clang_tidy
+				clang_tidy = clang_tidy,
+				cmake_tools = cmake_tools,
 			),
 			(CiPlatform::GitLabCI, BuildSystem::Makefile) => format!(
 				r#"image: ubuntu:latest
@@ -191,7 +198,7 @@ stages:
   - lint
 
 before_script:
-  - apt-get update && apt-get install -y make gcc g++ python3-venv clang-tidy
+  - {make_tools}
 
 build:
   stage: build
@@ -211,7 +218,8 @@ lint:
 				package_setup = package_setup,
 				gitlab_test_install = gitlab_test_install,
 				gitlab_test_step = gitlab_test_step,
-				clang_tidy = clang_tidy
+				clang_tidy = clang_tidy,
+				make_tools = make_tools,
 			),
 		}
 	}
@@ -357,9 +365,126 @@ fn make_target_exists(content: &str, target: &str) -> bool {
 		.any(|line| line.trim_start().starts_with(&prefix))
 }
 
-fn test_framework_packages(frameworks: &[TestFramework]) -> Vec<&'static str> {
-	let mut packages = Vec::new();
+fn distro_packages_for_frameworks(frameworks: &[TestFramework]) -> DistroPackages {
+	let mut apt = Vec::new();
+	let mut dnf = Vec::new();
+	let mut pacman = Vec::new();
+	let mut apk = Vec::new();
+	let mut zypper = Vec::new();
+	let mut brew = Vec::new();
 	for framework in frameworks {
+		match framework {
+			TestFramework::GoogleTest => {
+				apt.push("libgtest-dev");
+				dnf.push("gtest-devel");
+				pacman.push("gtest");
+				apk.push("gtest-dev");
+				zypper.push("libgtest-devel");
+				brew.push("googletest");
+			}
+			TestFramework::Catch2 => {
+				apt.push("catch2");
+				dnf.push("catch-devel");
+				pacman.push("catch2");
+				apk.push("catch2-dev");
+				zypper.push("catch2-devel");
+				brew.push("catch2");
+			}
+			TestFramework::Doctest => {
+				apt.push("doctest-dev");
+				dnf.push("doctest-devel");
+				pacman.push("doctest");
+				apk.push("doctest-dev");
+				zypper.push("doctest-devel");
+				brew.push("doctest");
+			}
+		}
+	}
+	DistroPackages {
+		apt,
+		dnf,
+		pacman,
+		apk,
+		zypper,
+		brew,
+	}
+}
+
+#[derive(Default)]
+struct DistroPackages {
+	apt: Vec<&'static str>,
+	dnf: Vec<&'static str>,
+	pacman: Vec<&'static str>,
+	apk: Vec<&'static str>,
+	zypper: Vec<&'static str>,
+	brew: Vec<&'static str>,
+}
+
+fn distro_install_snippet(packages: &DistroPackages) -> String {
+	let join = |list: &[&'static str]| list.join(" ");
+	format!(
+		"if command -v apt-get >/dev/null; then sudo apt-get update && sudo apt-get install -y {apt}; elif command -v dnf >/dev/null; then sudo dnf install -y {dnf}; elif command -v pacman >/dev/null; then sudo pacman -S --noconfirm {pacman}; elif command -v apk >/dev/null; then sudo apk add {apk}; elif command -v zypper >/dev/null; then sudo zypper install -y {zypper}; elif command -v brew >/dev/null; then brew install {brew}; else echo 'No supported package manager found' >&2; exit 1; fi",
+		apt = join(&packages.apt),
+		dnf = join(&packages.dnf),
+		pacman = join(&packages.pacman),
+		apk = join(&packages.apk),
+		zypper = join(&packages.zypper),
+		brew = join(&packages.brew),
+	)
+}
+
+fn build_tool_packages(with_cmake: bool, with_tidy: bool) -> DistroPackages {
+	let mut apt = vec!["make", "gcc", "g++"];
+	let mut dnf = vec!["make", "gcc", "gcc-c++"];
+	let mut pacman = vec!["make", "gcc"];
+	let mut apk = vec!["make", "gcc", "g++"];
+	let mut zypper = vec!["make", "gcc", "gcc-c++"];
+	let mut brew = vec!["make", "gcc"];
+	if with_cmake {
+		apt.insert(0, "cmake");
+		dnf.insert(0, "cmake");
+		pacman.insert(0, "cmake");
+		apk.insert(0, "cmake");
+		zypper.insert(0, "cmake");
+		brew.insert(0, "cmake");
+	}
+	if with_tidy {
+		apt.push("clang-tidy");
+		apt.push("python3-venv");
+		dnf.push("clang-tools-extra");
+		dnf.push("python3");
+		pacman.push("clang");
+		pacman.push("python");
+		apk.push("clang-extra-tools");
+		apk.push("python3");
+		apk.push("py3-pip");
+		zypper.push("clang");
+		zypper.push("python3");
+		brew.push("llvm");
+		brew.push("python3");
+	} else {
+		apt.push("python3-venv");
+		dnf.push("python3");
+		pacman.push("python");
+		apk.push("python3");
+		zypper.push("python3");
+		brew.push("python3");
+	}
+	DistroPackages {
+		apt,
+		dnf,
+		pacman,
+		apk,
+		zypper,
+		brew,
+	}
+}
+
+#[allow(dead_code)]
+fn test_framework_packages(_frameworks: &[TestFramework]) -> Vec<&'static str> {
+	// Kept for backwards compatibility; new code uses distro_packages_for_frameworks.
+	let mut packages = Vec::new();
+	for framework in _frameworks {
 		let package = match framework {
 			TestFramework::GoogleTest => "libgtest-dev",
 			TestFramework::Catch2 => "catch2",
@@ -372,15 +497,26 @@ fn test_framework_packages(frameworks: &[TestFramework]) -> Vec<&'static str> {
 	packages
 }
 
-fn github_test_install_step(packages: &[&str]) -> String {
-	if packages.is_empty() {
+#[allow(dead_code)]
+fn github_test_install_step(_packages: &[&str]) -> String {
+	// Legacy apt-only helper retained for compatibility; new templates use
+	// distro-aware snippets via github_test_install_snippet().
+	if _packages.is_empty() {
 		String::new()
 	} else {
 		format!(
 			"    - name: Install test framework\n      run: sudo apt-get install -y {}\n",
-			packages.join(" ")
+			_packages.join(" ")
 		)
 	}
+}
+
+fn github_test_install_snippet(frameworks: &[TestFramework]) -> String {
+	if frameworks.is_empty() {
+		return String::new();
+	}
+	let snippet = distro_install_snippet(&distro_packages_for_frameworks(frameworks));
+	format!("    - name: Install test framework\n      run: {snippet}\n")
 }
 
 fn github_test_step(build_system: BuildSystem, configuration: &TestConfiguration) -> String {
@@ -394,12 +530,21 @@ fn github_test_step(build_system: BuildSystem, configuration: &TestConfiguration
 	format!("    - name: Test\n      run: {command}\n")
 }
 
+#[allow(dead_code)]
 fn gitlab_test_install_step(packages: &[&str]) -> String {
 	if packages.is_empty() {
 		String::new()
 	} else {
 		format!("    - sudo apt-get install -y {}\n", packages.join(" "))
 	}
+}
+
+fn gitlab_test_install_snippet(frameworks: &[TestFramework]) -> String {
+	if frameworks.is_empty() {
+		return String::new();
+	}
+	let snippet = distro_install_snippet(&distro_packages_for_frameworks(frameworks));
+	format!("    - {snippet}\n")
 }
 
 fn gitlab_test_step(build_system: BuildSystem, configuration: &TestConfiguration) -> String {

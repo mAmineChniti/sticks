@@ -1,3 +1,4 @@
+use crate::cmake_parser;
 use crate::file_handler::write_atomic;
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -46,8 +47,22 @@ impl TargetType {
 	pub fn file_extension(&self) -> &'static str {
 		match self {
 			Self::Executable => "",
-			Self::StaticLibrary => ".a",
-			Self::SharedLibrary => ".so",
+			Self::StaticLibrary => {
+				if cfg!(target_os = "windows") {
+					".lib"
+				} else {
+					".a"
+				}
+			}
+			Self::SharedLibrary => {
+				if cfg!(target_os = "windows") {
+					".dll"
+				} else if cfg!(target_os = "macos") {
+					".dylib"
+				} else {
+					".so"
+				}
+			}
 		}
 	}
 }
@@ -98,11 +113,55 @@ impl MultiTargetManager {
 		let content = fs::read_to_string(cmake_path).context("Failed to read CMakeLists.txt")?;
 		let mut manager = Self::new();
 
+		for command in ["add_executable", "add_library"] {
+			for call in cmake_parser::find_calls(&content, command) {
+				let args = call.args.clone();
+				let Some(name) = args.first().cloned() else {
+					continue;
+				};
+				if command == "add_executable" {
+					if !is_manageable_cmake_target(&name) || args.contains(&"ALIAS".to_string()) {
+						continue;
+					}
+					let mut target = BuildTarget::new(name.clone(), TargetType::Executable);
+					for source in args.iter().skip(1).filter(|a| is_cmake_source_token(a)) {
+						target.add_source(source.to_string());
+					}
+					manager.add_target(target);
+				} else {
+					if !is_manageable_cmake_target(&name)
+						|| args
+							.iter()
+							.any(|argument| matches!(argument.as_str(), "ALIAS" | "IMPORTED"))
+					{
+						continue;
+					}
+					let target_type = if args
+						.iter()
+						.any(|argument| matches!(argument.as_str(), "SHARED" | "MODULE"))
+					{
+						TargetType::SharedLibrary
+					} else {
+						TargetType::StaticLibrary
+					};
+					let mut target = BuildTarget::new(name.clone(), target_type);
+					for source in args.iter().skip(1).filter(|a| is_cmake_source_token(a)) {
+						target.add_source(source.to_string());
+					}
+					manager.add_target(target);
+				}
+			}
+		}
+		// Legacy per-line pass retained for files with unusual formatting
+		// the shared parser does not cover.
 		for line in content.lines() {
 			if let Some(arguments) = cmake_command_arguments(line, "add_executable") {
 				let Some(name) = arguments.first().copied() else {
 					continue;
 				};
+				if manager.get_target(name).is_some() {
+					continue;
+				}
 				if !is_manageable_cmake_target(name) || arguments.contains(&"ALIAS") {
 					continue;
 				}
@@ -123,6 +182,9 @@ impl MultiTargetManager {
 				let Some(name) = arguments.first().copied() else {
 					continue;
 				};
+				if manager.get_target(name).is_some() {
+					continue;
+				}
 				if !is_manageable_cmake_target(name)
 					|| arguments
 						.iter()
@@ -151,6 +213,26 @@ impl MultiTargetManager {
 			}
 		}
 
+		for command in ["target_link_libraries", "add_dependencies"] {
+			for call in cmake_parser::find_calls(&content, command) {
+				let Some(name) = call.args.first().cloned() else {
+					continue;
+				};
+				let Some(target) = manager
+					.targets
+					.iter_mut()
+					.find(|target| target.name == name)
+				else {
+					continue;
+				};
+				for dependency in call.args.iter().skip(1) {
+					if command == "target_link_libraries" && is_cmake_link_keyword(dependency) {
+						continue;
+					}
+					target.add_dependency(dependency.to_string());
+				}
+			}
+		}
 		for line in content.lines() {
 			for command in ["target_link_libraries", "add_dependencies"] {
 				let Some(arguments) = cmake_command_arguments(line, command) else {
@@ -170,7 +252,9 @@ impl MultiTargetManager {
 					if command == "target_link_libraries" && is_cmake_link_keyword(dependency) {
 						continue;
 					}
-					target.add_dependency(dependency.to_string());
+					if !target.dependencies.contains(&dependency.to_string()) {
+						target.add_dependency(dependency.to_string());
+					}
 				}
 			}
 		}
@@ -476,8 +560,14 @@ impl MultiTargetManager {
 			let already_present = target.name.starts_with('$')
 				|| content.lines().any(|line| {
 					let trimmed = line.trim_start();
-					trimmed.starts_with(&format!("add_executable({}", target.name))
-						|| trimmed.starts_with(&format!("add_library({}", target.name))
+					(trimmed.starts_with("add_executable") || trimmed.starts_with("add_library"))
+						&& trimmed
+							.split_once('(')
+							.and_then(|(_, args)| args.split_whitespace().next())
+							.is_some_and(|name| {
+								name.trim_start_matches('(').trim_matches([')', '"', '\''])
+									== target.name
+							})
 				});
 			if !already_present {
 				validate_new_target(target)?;
@@ -568,8 +658,15 @@ impl MultiTargetManager {
 					make_static_library_definition(target, compiler, flags, &self.targets)
 				}
 				TargetType::SharedLibrary => format!(
-					"lib{}.so: {}\n\t{} {} $(CPPFLAGS) -shared -fPIC -o lib{}.so{} $(LDFLAGS) $(LDLIBS)\n",
-					target.name, prerequisites, compiler, flags, target.name, link_inputs
+					"lib{}{}: {}\n\t{} {} $(CPPFLAGS) -shared -fPIC -o lib{}{}{} $(LDFLAGS) $(LDLIBS)\n",
+					target.name,
+					target.target_type.file_extension(),
+					prerequisites,
+					compiler,
+					flags,
+					target.name,
+					target.target_type.file_extension(),
+					link_inputs
 				),
 			};
 			append_generated_line(&mut content, &definition);
@@ -739,30 +836,26 @@ fn canonical_make_target(name: &str) -> (String, TargetType) {
 		.file_name()
 		.and_then(|value| value.to_str())
 		.unwrap_or(name);
+	// Static and shared library suffixes across every supported platform.
+	// `.lib`/`.dll` must be recognised on Windows or a `libmylib.lib` rule is
+	// mis-parsed as an executable target.
+	const STATIC_SUFFIXES: [&str; 2] = [".a", ".lib"];
+	const SHARED_SUFFIXES: [&str; 3] = [".so", ".dylib", ".dll"];
+
 	if let Some(name_without_prefix) = name.strip_prefix("lib") {
-		if let Some(name_without_extension) = name_without_prefix.strip_suffix(".a")
-			&& !name_without_extension.is_empty()
-		{
-			return (
-				name_without_extension.to_string(),
-				TargetType::StaticLibrary,
-			);
+		for suffix in STATIC_SUFFIXES {
+			if let Some(base) = name_without_prefix.strip_suffix(suffix)
+				&& !base.is_empty()
+			{
+				return (base.to_string(), TargetType::StaticLibrary);
+			}
 		}
-		if let Some(name_without_extension) = name_without_prefix.strip_suffix(".so")
-			&& !name_without_extension.is_empty()
-		{
-			return (
-				name_without_extension.to_string(),
-				TargetType::SharedLibrary,
-			);
-		}
-		if let Some(name_without_extension) = name_without_prefix.strip_suffix(".dylib")
-			&& !name_without_extension.is_empty()
-		{
-			return (
-				name_without_extension.to_string(),
-				TargetType::SharedLibrary,
-			);
+		for suffix in SHARED_SUFFIXES {
+			if let Some(base) = name_without_prefix.strip_suffix(suffix)
+				&& !base.is_empty()
+			{
+				return (base.to_string(), TargetType::SharedLibrary);
+			}
 		}
 	}
 	(name.to_string(), TargetType::Executable)
@@ -905,8 +998,9 @@ fn make_static_library_definition(
 		push_unique(&mut prerequisites, dependency);
 	}
 	output.push_str(&format!(
-		"lib{}.a: {}\n\t@mkdir -p $(dir $@)\n\tar rcs $@ {}\n",
+		"lib{}{}: {}\n\t@mkdir -p $(dir $@)\n\tar rcs $@ {}\n",
 		target.name,
+		target.target_type.file_extension(),
 		prerequisites.join(" "),
 		objects.join(" ")
 	));
@@ -1042,8 +1136,9 @@ fn validate_dependency_name(dependency: &str) -> Result<()> {
 fn target_rule_name(target: &BuildTarget) -> String {
 	match target.target_type {
 		TargetType::Executable => target.name.clone(),
-		TargetType::StaticLibrary => format!("lib{}.a", target.name),
-		TargetType::SharedLibrary => format!("lib{}.so", target.name),
+		TargetType::StaticLibrary | TargetType::SharedLibrary => {
+			format!("lib{}{}", target.name, target.target_type.file_extension())
+		}
 	}
 }
 
@@ -1069,8 +1164,17 @@ fn cmake_target_name_candidates(name: &str) -> Vec<String> {
 
 fn is_cmake_target_line(line: &str, command: &str, name: &str) -> bool {
 	let trimmed = line.trim_start();
-	let prefix = format!("{command}({name}");
-	let Some(remainder) = trimmed.strip_prefix(&prefix) else {
+	let Some(after_command) = trimmed.strip_prefix(command) else {
+		return false;
+	};
+	// Allow whitespace between command and `(`: `add_executable (foo ...)`.
+	let after_command = after_command.trim_start();
+	let Some(args) = after_command.strip_prefix('(') else {
+		return false;
+	};
+	let args = args.trim_start();
+	let prefix = name;
+	let Some(remainder) = args.strip_prefix(prefix) else {
 		return false;
 	};
 	remainder
@@ -1158,5 +1262,46 @@ mod tests {
 		let mut target = BuildTarget::new("mylib".to_string(), TargetType::StaticLibrary);
 		target.add_source("src/lib.cpp".to_string());
 		assert_eq!(target.sources.len(), 1);
+	}
+
+	#[test]
+	fn canonical_make_target_recognizes_windows_suffixes() {
+		assert_eq!(
+			canonical_make_target("libmylib.lib"),
+			("mylib".to_string(), TargetType::StaticLibrary)
+		);
+		assert_eq!(
+			canonical_make_target("libmylib.dll"),
+			("mylib".to_string(), TargetType::SharedLibrary)
+		);
+		assert_eq!(
+			canonical_make_target("libmylib.a"),
+			("mylib".to_string(), TargetType::StaticLibrary)
+		);
+		assert_eq!(
+			canonical_make_target("libmylib.dylib"),
+			("mylib".to_string(), TargetType::SharedLibrary)
+		);
+		assert_eq!(
+			canonical_make_target("myapp"),
+			("myapp".to_string(), TargetType::Executable)
+		);
+	}
+
+	#[test]
+	fn library_rule_name_matches_all_dependency() {
+		// The rule written for a library must use the same platform-specific
+		// filename that `all:` depends on, or make reports "No rule to make".
+		for target_type in [TargetType::StaticLibrary, TargetType::SharedLibrary] {
+			let target = BuildTarget::new("mylib".to_string(), target_type);
+			let expected = target_rule_name(&target);
+			let extension = target_type.file_extension();
+			assert!(
+				expected.ends_with(extension),
+				"rule name {expected} must end with {extension}"
+			);
+			// The identifier list must resolve back to the same target.
+			assert!(make_target_identifiers(&expected).contains(&"mylib".to_string()));
+		}
 	}
 }

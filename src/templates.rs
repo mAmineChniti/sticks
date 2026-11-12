@@ -143,12 +143,21 @@ pub fn generate_vscode_launch_config(project_name: &str) -> String {
 	)
 }
 
+/// Impure CWD-sniffing wrapper kept for backwards compatibility.
+/// Prefer `generate_vscode_tasks_config_for` (pure) or
+/// `generate_vscode_tasks_config_in` (explicit dir) in new code.
 pub fn generate_vscode_tasks_config() -> String {
-	let build_system = if Path::new("CMakeLists.txt").is_file() {
+	let current = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+	generate_vscode_tasks_config_in(&current)
+}
+
+/// Explicit-dir variant: inspects `dir` instead of the process working directory.
+pub fn generate_vscode_tasks_config_in(dir: &Path) -> String {
+	let build_system = if dir.join("CMakeLists.txt").is_file() {
 		BuildSystem::CMake
 	} else if ["Makefile", "makefile", "GNUmakefile"]
 		.iter()
-		.any(|name| Path::new(name).is_file())
+		.any(|name| dir.join(name).is_file())
 	{
 		BuildSystem::Makefile
 	} else {
@@ -159,55 +168,60 @@ pub fn generate_vscode_tasks_config() -> String {
 }
 
 pub fn generate_vscode_tasks_config_for(build_system: BuildSystem) -> String {
+	// `$msCompile` understands MSVC output; `$gcc` covers gcc/clang on
+	// Unix-like systems. clang-cl still emits MSVC-style diagnostics.
+	let problem_matcher = if cfg!(windows) { "$msCompile" } else { "$gcc" };
 	match build_system {
-		BuildSystem::Makefile => "{\n\
+		BuildSystem::Makefile => format!(
+			"{{\n\
 			\"version\": \"2.0.0\",\n\
 			\"tasks\": [\n\
-				{\n\
+				{{\n\
 					\"label\": \"build\",\n\
 					\"type\": \"process\",\n\
 					\"command\": \"make\",\n\
 					\"args\": [\"all\"],\n\
-					\"options\": {\"cwd\": \"${workspaceFolder}\"},\n\
-					\"problemMatcher\": [\"$gcc\"],\n\
-					\"group\": {\n\
+					\"options\": {{\"cwd\": \"${{workspaceFolder}}\"}},\n\
+					\"problemMatcher\": [\"{problem_matcher}\"],\n\
+					\"group\": {{\n\
 						\"kind\": \"build\",\n\
 						\"isDefault\": true\n\
-					}\n\
-				},\n\
-				{\n\
+					}}\n\
+				}},\n\
+				{{\n\
 					\"label\": \"rebuild\",\n\
 					\"type\": \"process\",\n\
 					\"command\": \"make\",\n\
 					\"args\": [\"rebuild\"],\n\
-					\"options\": {\"cwd\": \"${workspaceFolder}\"},\n\
-					\"problemMatcher\": [\"$gcc\"]\n\
-				}\n\
+					\"options\": {{\"cwd\": \"${{workspaceFolder}}\"}},\n\
+					\"problemMatcher\": [\"{problem_matcher}\"]\n\
+				}}\n\
 			]\n\
-		}\n"
-		.to_string(),
-		BuildSystem::CMake => "{\n\
+		}}\n"
+		),
+		BuildSystem::CMake => format!(
+			"{{\n\
 			\"version\": \"2.0.0\",\n\
 			\"tasks\": [\n\
-				{\n\
+				{{\n\
 					\"label\": \"build\",\n\
 					\"type\": \"shell\",\n\
-					\"command\": \"mkdir -p build bin && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .\",\n\
-					\"problemMatcher\": [\"$gcc\"],\n\
-					\"group\": {\n\
+					\"command\": \"cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build\",\n\
+					\"problemMatcher\": [\"{problem_matcher}\"],\n\
+					\"group\": {{\n\
 						\"kind\": \"build\",\n\
 						\"isDefault\": true\n\
-					}\n\
-				},\n\
-				{\n\
+					}}\n\
+				}},\n\
+				{{\n\
 					\"label\": \"rebuild\",\n\
 					\"type\": \"shell\",\n\
-					\"command\": \"rm -rf build bin && mkdir -p build bin && cd build && cmake .. && cmake --build .\",\n\
-					\"problemMatcher\": [\"$gcc\"]\n\
-				}\n\
+					\"command\": \"cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --clean-first\",\n\
+					\"problemMatcher\": [\"{problem_matcher}\"]\n\
+				}}\n\
 			]\n\
-		}\n"
-		.to_string(),
+		}}\n"
+		),
 	}
 }
 

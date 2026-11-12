@@ -51,6 +51,28 @@ pub struct TestFrameworkManager {
 	pub framework: TestFramework,
 }
 
+/// Inserts `block` on its own line directly after the closing paren of the
+/// `project()` call. Uses the paren-aware scanner so a multiline `project(` is
+/// never split. Errors if no `project()` call exists.
+fn insert_after_project_call(content: &mut String, block: &str) -> Result<()> {
+	let call = crate::cmake_parser::find_calls(content, "project")
+		.into_iter()
+		.next()
+		.ok_or_else(|| {
+			anyhow::anyhow!("No project() call found; add the directive to CMakeLists.txt manually")
+		})?;
+	if !content.is_empty() && !content.ends_with('\n') {
+		content.push('\n');
+	}
+	let insert_pos = match content[call.end_byte..].find('\n') {
+		Some(offset) => call.end_byte + offset + 1,
+		// No trailing newline: append on a fresh line.
+		None => content.len(),
+	};
+	content.insert_str(insert_pos, block);
+	Ok(())
+}
+
 impl TestFrameworkManager {
 	pub fn new(framework: TestFramework) -> Self {
 		TestFrameworkManager { framework }
@@ -62,55 +84,49 @@ impl TestFrameworkManager {
 			fs::read_to_string(cmake_path).context("Failed to read CMakeLists.txt")?;
 		ensure_cmake_test_framework_compatible(&content, self.framework, project_name, cmake_path)?;
 
-		// Add find_package
-		let find_package = match self.framework {
-			TestFramework::Catch2 => "find_package(Catch2 3 REQUIRED)\n".to_string(),
-			_ => format!(
-				"find_package({} REQUIRED)\n",
-				self.framework.cmake_find_package()
-			),
+		let project_name = crate::project_build_name(project_name);
+		let package = self.framework.cmake_find_package();
+		let version = if self.framework == TestFramework::Catch2 {
+			" 3"
+		} else {
+			""
 		};
-		if !content.contains(&find_package)
-			&& let Some(project_pos) = content.find("project(")
-			&& let Some(newline_pos) = content[project_pos..].find('\n')
-		{
-			let insert_pos = project_pos + newline_pos + 1;
-			content.insert_str(insert_pos, &find_package);
+
+		// Add find_package, unless the package is already requested (with or
+		// without a pinned version). Reuse the paren-aware scanner so a
+		// multiline `project(` or an existing call is never mangled.
+		let already_declared = crate::cmake_parser::find_calls(&content, "find_package")
+			.into_iter()
+			.any(|call| {
+				call.args
+					.first()
+					.is_some_and(|arg| arg.eq_ignore_ascii_case(package))
+			});
+		if !already_declared {
+			let find_package = format!("find_package({}{} REQUIRED)\n", package, version);
+			insert_after_project_call(&mut content, &find_package)?;
 		}
 
 		// Add enable_testing
-		if !content.contains("enable_testing()")
-			&& let Some(project_pos) = content.find("project(")
-			&& let Some(newline_pos) = content[project_pos..].find('\n')
-		{
-			let insert_pos = project_pos + newline_pos + 1;
-			content.insert_str(insert_pos, "enable_testing()\n");
+		let has_enable_testing = crate::cmake_parser::find_calls(&content, "enable_testing")
+			.into_iter()
+			.any(|call| call.args.is_empty());
+		if !has_enable_testing {
+			insert_after_project_call(&mut content, "enable_testing()\n")?;
 		}
 
 		// Add test executable
-		let test_content = match self.framework {
-			TestFramework::GoogleTest => format!(
-				r#"add_executable({}_test tests/test_{}.cpp)
-target_link_libraries({}_test GTest::gtest)
-add_test(NAME {} COMMAND {}_test)
-"#,
-				project_name, project_name, project_name, project_name, project_name
-			),
-			TestFramework::Catch2 => format!(
-				r#"add_executable({}_test tests/test_{}.cpp)
-target_link_libraries({}_test Catch2::Catch2WithMain)
-add_test(NAME {} COMMAND {}_test)
-"#,
-				project_name, project_name, project_name, project_name, project_name
-			),
-			TestFramework::Doctest => format!(
-				r#"add_executable({}_test tests/test_{}.cpp)
-target_link_libraries({}_test doctest::doctest)
-add_test(NAME {} COMMAND {}_test)
-"#,
-				project_name, project_name, project_name, project_name, project_name
-			),
+		let test_link = match self.framework {
+			TestFramework::GoogleTest => "GTest::gtest",
+			TestFramework::Catch2 => "Catch2::Catch2WithMain",
+			TestFramework::Doctest => "doctest::doctest",
 		};
+		let test_content = format!(
+			"add_executable({0}_test tests/test_{0}.cpp)\n\
+			 target_link_libraries({0}_test {1})\n\
+			 add_test(NAME {0} COMMAND {0}_test)\n",
+			project_name, test_link
+		);
 
 		if !content.contains(&format!("{}_test", project_name)) {
 			content.push_str(&test_content);
@@ -362,6 +378,32 @@ fn ensure_make_test_framework_compatible(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn inserts_after_multiline_project_call() {
+		let mut content = String::from(
+			"cmake_minimum_required(VERSION 3.10)\nproject(\n  demo\n  LANGUAGES CXX\n)\nadd_executable(app main.cpp)\n",
+		);
+		insert_after_project_call(&mut content, "enable_testing()\n").unwrap();
+		assert!(
+			content
+				.contains("project(\n  demo\n  LANGUAGES CXX\n)\nenable_testing()\nadd_executable")
+		);
+	}
+
+	#[test]
+	fn inserts_after_single_line_project_call() {
+		let mut content =
+			String::from("project(demo LANGUAGES CXX)\nadd_executable(app main.cpp)\n");
+		insert_after_project_call(&mut content, "enable_testing()\n").unwrap();
+		assert!(content.contains("project(demo LANGUAGES CXX)\nenable_testing()\n"));
+	}
+
+	#[test]
+	fn errors_when_no_project_call() {
+		let mut content = String::from("add_executable(app main.cpp)\n");
+		assert!(insert_after_project_call(&mut content, "enable_testing()\n").is_err());
+	}
 
 	#[test]
 	fn test_test_framework_from_str() {

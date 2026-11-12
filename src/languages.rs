@@ -9,15 +9,29 @@ pub trait LanguageConsts {
 	fn generate_helloworld_content(&self) -> String;
 
 	fn generate_makefile_content(&self, project_name: &str) -> String {
+		self.generate_makefile_content_with(project_name, None)
+	}
+
+	fn generate_makefile_content_with(
+		&self,
+		project_name: &str,
+		toolchain: Option<&crate::toolchain::Toolchain>,
+	) -> String {
 		let project_name = crate::project_build_name(project_name);
 		let compiler_variable = makefile_compiler_variable(self.extension());
 		let flags_variable = makefile_flags_variable(self.extension());
 		let standard_flag = makefile_standard_flag(self.extension());
 		let source_block = makefile_source_block(self.extension());
+		let resolved = toolchain.cloned().unwrap_or_default().resolved();
+		let compiler = if compiler_variable == "CXX" {
+			resolved.cxx.unwrap_or_else(|| self.cc().to_string())
+		} else {
+			resolved.cc.unwrap_or_else(|| self.cc().to_string())
+		};
 
 		format!(
-			"# Compiler and flags\n\
-			{} = {}\n\
+			"# Compiler and flags (override via environment or make variables)\n\
+			{} ?= {}\n\
 			{} = {} -Wall -Wextra -Werror -O2 -g\n\
 			CPPFLAGS = -I$(INCLUDE_DIR)\n\
 			LDFLAGS =\n\
@@ -56,7 +70,7 @@ pub trait LanguageConsts {
 			\n\
 			.PHONY: all clean run rebuild\n",
 			compiler_variable,
-			self.cc(),
+			compiler,
 			flags_variable,
 			standard_flag,
 			source_block,
@@ -92,20 +106,34 @@ fn makefile_standard_flag(extension: &str) -> &'static str {
 }
 
 fn makefile_source_block(extension: &str) -> String {
-	let source_pattern = if is_cpp_extension(extension) {
-		r#"find $(SRC_DIR) -type f \( -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' -o -name '*.c++' -o -name '*.C' -o -name '*.CPP' -o -name '*.CC' -o -name '*.CXX' \) -print | sort"#
+	let extensions: &[&str] = if is_cpp_extension(extension) {
+		&["cpp", "cc", "cxx", "c++", "C", "CPP", "CC", "CXX"]
 	} else {
-		"find $(SRC_DIR) -type f -name '*.c' -print | sort"
+		&["c"]
 	};
-	format!(
-		"SRCS = $(shell {source_pattern})\n\
-		OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%.o,$(SRCS))\n\
-		\n\
-		$(BUILD_DIR)/%.o: $(SRC_DIR)/%\n\
+	// `find`/`sort` are used instead of `$(wildcard)` so sources in
+	// subdirectories of `src/` are picked up. They exist on every Unix and
+	// in the Git Bash / MSYS2 environments used for Makefiles on Windows.
+	let name_tests = extensions
+		.iter()
+		.map(|ext| format!("-name '*.{ext}'"))
+		.collect::<Vec<_>>()
+		.join(" -o ");
+	let mut rules = String::new();
+	for ext in extensions {
+		let compiler = makefile_compiler_variable(if is_cpp_extension(ext) { "cpp" } else { "c" });
+		let flags = makefile_flags_variable(if is_cpp_extension(ext) { "cpp" } else { "c" });
+		rules.push_str(&format!(
+			"$(BUILD_DIR)/%.o: $(SRC_DIR)/%.{ext}\n\
 			\t@mkdir -p $(dir $@)\n\
 			\t$({compiler}) $(CPPFLAGS) $({flags}) -c $< -o $@\n",
-		compiler = makefile_compiler_variable(extension),
-		flags = makefile_flags_variable(extension),
+		));
+	}
+	format!(
+		"SRCS = $(sort $(shell find $(SRC_DIR) -type f \\( {name_tests} \\) -print))\n\
+		OBJS = $(addprefix $(BUILD_DIR)/,$(addsuffix .o,$(patsubst $(SRC_DIR)/%,%,$(basename $(SRCS)))))\n\
+		\n\
+		{rules}"
 	)
 }
 
@@ -238,8 +266,17 @@ impl Language {
 	pub fn from_project_structure_with_prompt(
 		interactive: bool,
 	) -> Result<Language, anyhow::Error> {
-		if Path::new("src").is_dir()
-			&& let Some(extension) = source_extension(Path::new("src"))?
+		let current = std::env::current_dir().context("Failed to get current directory")?;
+		Self::from_project_structure_in(&current, interactive)
+	}
+
+	/// CWD-independent variant: inspects `dir/src` instead of `./src`.
+	pub fn from_project_structure_in(
+		dir: &Path,
+		interactive: bool,
+	) -> Result<Language, anyhow::Error> {
+		if dir.join("src").is_dir()
+			&& let Some(extension) = source_extension(&dir.join("src"))?
 		{
 			return Ok(if extension == "cpp" {
 				Language::Cpp

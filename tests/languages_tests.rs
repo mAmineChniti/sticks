@@ -32,7 +32,7 @@ fn test_language_helloworld() {
 #[test]
 fn test_language_makefile() {
 	let makefile = Language::C.generate_makefile_content("test_project");
-	assert!(makefile.contains("CC = gcc"));
+	assert!(makefile.contains("CC ?="));
 	assert!(makefile.contains("TARGET = $(BIN_DIR)/test_project"));
 	assert!(makefile.contains("BIN_DIR = bin"));
 	assert!(makefile.contains("all:"));

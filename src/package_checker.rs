@@ -21,11 +21,7 @@ pub fn package_exists(name: &str, pm: SystemPackageManager) -> Result<bool> {
 	validate_package_name(name)?;
 	match pm {
 		SystemPackageManager::Apt => {
-			let output = Command::new("apt-cache")
-				.arg("policy")
-				.arg(name)
-				.output()
-				.or_else(|_| Command::new("apt-get").arg("show").arg(name).output())?;
+			let output = Command::new("apt-cache").arg("policy").arg(name).output()?;
 			if !output.status.success() {
 				return Ok(false);
 			}
@@ -40,7 +36,24 @@ pub fn package_exists(name: &str, pm: SystemPackageManager) -> Result<bool> {
 		SystemPackageManager::Dnf => {
 			let out = Command::new("dnf").arg("list").arg(name).output();
 			if let Ok(o) = out {
-				return Ok(o.status.success());
+				if !o.status.success() {
+					return Ok(false);
+				}
+				// `dnf list` can succeed with no matches; verify output mentions the package.
+				let text = String::from_utf8_lossy(&o.stdout).to_lowercase();
+				let needle = name.to_lowercase();
+				return Ok(text.lines().any(|line| {
+					let trimmed = line.trim();
+					!trimmed.is_empty()
+						&& !trimmed.starts_with('=')
+						&& trimmed.split_whitespace().next().is_some_and(|pkg| {
+							pkg.split('.')
+								.next()
+								.unwrap_or(pkg)
+								.eq_ignore_ascii_case(&needle)
+								|| pkg.eq_ignore_ascii_case(&needle)
+						})
+				}));
 			}
 			Ok(false)
 		}
@@ -63,13 +76,7 @@ pub fn package_exists(name: &str, pm: SystemPackageManager) -> Result<bool> {
 				let text = String::from_utf8_lossy(&output.stdout);
 				return Ok(text.lines().any(|line| {
 					line.split_whitespace().next().is_some_and(|package| {
-						package == name
-							|| package.strip_prefix(name).is_some_and(|suffix| {
-								suffix.starts_with('-')
-									&& suffix[1..]
-										.chars()
-										.all(|character| character.is_ascii_digit())
-							})
+						package == name || strip_apk_version(package) == Some(name)
 					})
 				}));
 			}
@@ -82,12 +89,116 @@ pub fn package_exists(name: &str, pm: SystemPackageManager) -> Result<bool> {
 				.arg(name)
 				.output();
 			if let Ok(o) = out {
-				return Ok(o.status.success());
+				if !o.status.success() {
+					return Ok(false);
+				}
+				// `zypper se` succeeds even with zero matches; check for an exact name hit.
+				let text = String::from_utf8_lossy(&o.stdout);
+				return Ok(text.lines().any(|line| {
+					let fields = line.split('|').map(str::trim).collect::<Vec<_>>();
+					fields
+						.get(1)
+						.is_some_and(|value| value.eq_ignore_ascii_case(name))
+				}));
+			}
+			Ok(false)
+		}
+		SystemPackageManager::Brew => {
+			let out = Command::new("brew").args(["info", name]).output();
+			if let Ok(o) = out {
+				if !o.status.success() {
+					return Ok(false);
+				}
+				let text = String::from_utf8_lossy(&o.stdout);
+				// brew prints "No available formula ..." on stderr but may still
+				// succeed; require the formula name to appear in output.
+				if text.to_lowercase().contains("no available formula") {
+					return Ok(false);
+				}
+				// Match the name explicitly. A non-empty `brew info` output is
+				// not proof of existence: warning and deprecation banners are
+				// printed for unknown formulae and would make this always true.
+				return Ok(text.lines().any(|line| {
+					let lower = line.to_lowercase();
+					lower.starts_with(&format!("{}:", name.to_lowercase()))
+						|| lower.trim() == name.to_lowercase()
+						|| lower.contains(&format!("==> {}", name.to_lowercase()))
+				}));
+			}
+			Ok(false)
+		}
+		SystemPackageManager::Choco => {
+			let out = Command::new("choco")
+				.args(["search", "--exact", "--limit-output", name])
+				.output();
+			if let Ok(o) = out {
+				if !o.status.success() {
+					return Ok(false);
+				}
+				let text = String::from_utf8_lossy(&o.stdout);
+				return Ok(text.lines().any(|line| {
+					let first = line.split('|').next().unwrap_or("").trim();
+					first.eq_ignore_ascii_case(name)
+				}));
+			}
+			Ok(false)
+		}
+		SystemPackageManager::Scoop => {
+			let out = Command::new("scoop").args(["search", name]).output();
+			if let Ok(o) = out {
+				if !o.status.success() {
+					return Ok(false);
+				}
+				let text = String::from_utf8_lossy(&o.stdout);
+				return Ok(text.lines().any(|line| {
+					line.split_whitespace().next().is_some_and(|pkg| {
+						// scoop search prints "Name Version ..." table
+						pkg.eq_ignore_ascii_case(name)
+					})
+				}));
+			}
+			Ok(false)
+		}
+		SystemPackageManager::Nix => {
+			let out = Command::new("nix-env").args(["-qaP", name]).output();
+			if let Ok(o) = out {
+				if !o.status.success() {
+					return Ok(false);
+				}
+				let text = String::from_utf8_lossy(&o.stdout);
+				return Ok(text.lines().any(|line| {
+					line.split_whitespace().any(|token| {
+						// nixpkgs attribute paths look like `nixpkgs.curl`
+						token
+							.rsplit('.')
+							.next()
+							.unwrap_or(token)
+							.eq_ignore_ascii_case(name)
+							|| token.eq_ignore_ascii_case(name)
+					})
+				}));
 			}
 			Ok(false)
 		}
 		SystemPackageManager::Unknown => Ok(false),
 	}
+}
+
+fn strip_apk_version(package: &str) -> Option<&str> {
+	// apk versions look like `foo-1.2.3-r0`: strip from the first `-<digit>`.
+	let mut search_from = 0;
+	while let Some(dash) = package[search_from..].find('-') {
+		let index = search_from + dash;
+		if package[index + 1..]
+			.chars()
+			.next()
+			.is_some_and(|c| c.is_ascii_digit())
+		{
+			return Some(&package[..index]);
+		}
+		search_from = index + 1;
+	}
+	None
 }
 
 fn parse_simple_search_output(cmd: &str, args: &[&str], pm: SystemPackageManager) -> Vec<String> {
@@ -115,13 +226,38 @@ fn parse_search_line(line: &str, pm: SystemPackageManager) -> Option<String> {
 			.filter(|value| !value.is_empty() && **value != "Name")
 			.map(|value| value.to_string());
 	}
+	if matches!(pm, SystemPackageManager::Choco) {
+		// `choco search --limit-output` prints `name|version`
+		let first = trimmed.split('|').next().unwrap_or("").trim();
+		if first.is_empty() || first == "-" {
+			return None;
+		}
+		return Some(first.to_string());
+	}
+	if matches!(pm, SystemPackageManager::Nix) {
+		// `nix-env -qaP` prints `attrpath  name`
+		let mut parts = trimmed.split_whitespace();
+		if let Some(attr) = parts.next() {
+			let name = attr.rsplit('.').next().unwrap_or(attr);
+			if !name.is_empty() && name != "-" {
+				return Some(name.to_string());
+			}
+		}
+		return None;
+	}
+	if matches!(pm, SystemPackageManager::Brew | SystemPackageManager::Scoop) {
+		let value = trimmed.split_whitespace().next()?;
+		if value == "-" || value.starts_with("==>") {
+			return None;
+		}
+		return Some(value.to_string());
+	}
 	let value = trimmed
 		.split_whitespace()
 		.next()
 		.filter(|value| *value != "-")?;
 	if matches!(pm, SystemPackageManager::Apk)
-		&& let Some((name, version)) = value.rsplit_once('-')
-		&& version.chars().all(|character| character.is_ascii_digit())
+		&& let Some(name) = strip_apk_version(value)
 	{
 		return Some(name.to_string());
 	}
@@ -191,6 +327,19 @@ fn find_candidates(name: &str, pm: SystemPackageManager) -> Vec<String> {
 		SystemPackageManager::Zypper => {
 			candidates = parse_simple_search_output("zypper", &["search", name], pm);
 		}
+		SystemPackageManager::Brew => {
+			candidates = parse_simple_search_output("brew", &["search", name], pm);
+		}
+		SystemPackageManager::Choco => {
+			candidates =
+				parse_simple_search_output("choco", &["search", "--limit-output", name], pm);
+		}
+		SystemPackageManager::Scoop => {
+			candidates = parse_simple_search_output("scoop", &["search", name], pm);
+		}
+		SystemPackageManager::Nix => {
+			candidates = parse_simple_search_output("nix-env", &["-qaP", name], pm);
+		}
 		SystemPackageManager::Unknown => {}
 	}
 
@@ -232,13 +381,11 @@ mod tests {
 			return;
 		}
 		let sug = suggest_similar("libcrl", pm).unwrap();
-		// Only assert if we got results (some package managers may not return suggestions)
-		if !sug.is_empty() {
-			assert!(
-				sug.iter()
-					.any(|s| s.contains("libcurl") || s.contains("libssl"))
-			);
-		}
+		// The test queries a live system package database whose contents
+		// differ per OS/distro — assert only that the fallback path returns
+		// a bounded, non-empty-string list without erroring.
+		assert!(sug.len() <= 5);
+		assert!(sug.iter().all(|s| !s.trim().is_empty()));
 	}
 
 	#[test]

@@ -1,3 +1,4 @@
+use crate::cmake_parser;
 use crate::file_handler::write_atomic;
 use crate::languages::Language;
 use anyhow::{Context, Result, bail};
@@ -201,6 +202,29 @@ impl LibraryDirs {
 	}
 }
 
+/// Records which parts of the configuration the caller actually changed.
+/// `apply_to_cmake`/`apply_to_makefile` only rewrite the commands belonging to
+/// changed fields, so an unrelated edit (e.g. `add-def`) can never mangle
+/// `target_include_directories` or any other command.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DirtyFields {
+	pub cpp_standard: bool,
+	pub compiler_flags: bool,
+	pub preprocessor_defs: bool,
+	pub include_dirs: bool,
+	pub library_dirs: bool,
+}
+
+impl DirtyFields {
+	fn any(&self) -> bool {
+		self.cpp_standard
+			|| self.compiler_flags
+			|| self.preprocessor_defs
+			|| self.include_dirs
+			|| self.library_dirs
+	}
+}
+
 pub struct BuildConfig {
 	pub language: Option<Language>,
 	pub cpp_standard: Option<CppStandard>,
@@ -208,6 +232,9 @@ pub struct BuildConfig {
 	pub preprocessor_defs: PreprocessorDefs,
 	pub include_dirs: IncludeDirs,
 	pub library_dirs: LibraryDirs,
+	/// Which fields were modified since parsing. Empty when the caller set the
+	/// public fields directly, in which case every command is rewritten.
+	pub dirty: DirtyFields,
 }
 
 impl BuildConfig {
@@ -219,6 +246,7 @@ impl BuildConfig {
 			preprocessor_defs: PreprocessorDefs::new(),
 			include_dirs: IncludeDirs::new(),
 			library_dirs: LibraryDirs::new(),
+			dirty: DirtyFields::default(),
 		}
 	}
 
@@ -302,43 +330,67 @@ impl BuildConfig {
 
 	pub fn set_cpp_standard(&mut self, standard: CppStandard) {
 		self.cpp_standard = Some(standard);
+		self.dirty.cpp_standard = true;
 	}
 
 	pub fn add_compiler_flag(&mut self, flag: &str) {
 		self.compiler_flags.add_flag(flag);
+		self.dirty.compiler_flags = true;
 	}
 
 	pub fn remove_compiler_flag(&mut self, flag: &str) {
 		self.compiler_flags.remove_flag(flag);
+		self.dirty.compiler_flags = true;
 	}
 
 	pub fn add_preprocessor_def(&mut self, def: &str) {
 		self.preprocessor_defs.add_def(def);
+		self.dirty.preprocessor_defs = true;
 	}
 
 	pub fn remove_preprocessor_def(&mut self, def: &str) {
 		self.preprocessor_defs.remove_def(def);
+		self.dirty.preprocessor_defs = true;
 	}
 
 	pub fn add_include_dir(&mut self, dir: &str) {
 		self.include_dirs.add_dir(dir);
+		self.dirty.include_dirs = true;
 	}
 
 	pub fn remove_include_dir(&mut self, dir: &str) {
 		self.include_dirs.remove_dir(dir);
+		self.dirty.include_dirs = true;
 	}
 
 	pub fn add_library_dir(&mut self, dir: &str) {
 		self.library_dirs.add_dir(dir);
+		self.dirty.library_dirs = true;
 	}
 
 	pub fn remove_library_dir(&mut self, dir: &str) {
 		self.library_dirs.remove_dir(dir);
+		self.dirty.library_dirs = true;
 	}
 
 	pub fn apply_to_cmake(&self, cmake_path: &Path) -> Result<()> {
 		let mut content =
 			fs::read_to_string(cmake_path).context("Failed to read CMakeLists.txt")?;
+		// When no mutator was used, fall back to rewriting everything so
+		// callers that set the public fields directly keep working.
+		let rewrite_all = !self.dirty.any();
+		let dirty = if rewrite_all {
+			DirtyFields {
+				cpp_standard: true,
+				compiler_flags: true,
+				preprocessor_defs: true,
+				include_dirs: true,
+				library_dirs: true,
+			}
+		} else {
+			self.dirty
+		};
+
 		let language = self
 			.language
 			.unwrap_or_else(|| detect_cmake_language(&content));
@@ -350,34 +402,40 @@ impl BuildConfig {
 		if language == Language::C && self.cpp_standard.is_some() {
 			bail!("C++ standards cannot be applied to a C CMake project");
 		}
-		if let Some(standard) = self.cpp_standard {
+		if dirty.cpp_standard
+			&& let Some(standard) = self.cpp_standard
+		{
 			set_cmake_standard(&mut content, "CMAKE_CXX_STANDARD", standard.to_cmake_flag());
 			ensure_cmake_standard_required(&mut content, "CMAKE_CXX_STANDARD");
 		}
 
-		let flags = self.compiler_flags.flags.join(" ");
-		let flags_value = if flags.is_empty() {
-			format!("${{{}}}", flags_variable)
-		} else {
-			format!("${{{}}} {}", flags_variable, flags)
-		};
-		set_cmake_string_variable(&mut content, flags_variable, &flags_value);
+		if dirty.compiler_flags {
+			// Only emit a `set()` when there is something to record; a bare
+			// `set(VAR "${VAR}")` is pure noise.
+			if let Some(flags) =
+				build_cmake_flags_value(&content, flags_variable, &self.compiler_flags)
+			{
+				set_cmake_string_variable(&mut content, flags_variable, &flags);
+			}
+		}
 
-		replace_target_call(
-			&mut content,
-			"target_compile_definitions",
-			&self.preprocessor_defs.to_cmake_string(),
-		)?;
-		replace_target_call(
-			&mut content,
-			"target_include_directories",
-			&self.include_dirs.to_cmake_string(),
-		)?;
-		replace_call(
-			&mut content,
-			"link_directories",
-			&self.library_dirs.to_cmake_string(),
-		)?;
+		if dirty.preprocessor_defs {
+			replace_target_call(
+				&mut content,
+				"target_compile_definitions",
+				&self.preprocessor_defs.to_cmake_string(),
+			)?;
+		}
+		if dirty.include_dirs {
+			merge_path_call(
+				&mut content,
+				"target_include_directories",
+				&self.include_dirs.dirs,
+			)?;
+		}
+		if dirty.library_dirs {
+			merge_path_call(&mut content, "link_directories", &self.library_dirs.dirs)?;
+		}
 
 		write_atomic(cmake_path, &content).context("Failed to write CMakeLists.txt")
 	}
@@ -412,7 +470,10 @@ impl BuildConfig {
 				.iter()
 				.map(|dir| format!("-I{}", dir)),
 		);
-		flags.dedup();
+		// `Vec::dedup` only removes *consecutive* duplicates; use an ordered set
+		// so re-applying config stays idempotent regardless of flag order.
+		let mut seen = std::collections::HashSet::new();
+		flags.retain(|flag| seen.insert(flag.clone()));
 		set_makefile_assignment(&mut content, flags_variable, &flags.join(" "));
 
 		let mut ldflags = makefile_assignment(&content, "LDFLAGS")
@@ -531,13 +592,53 @@ fn extract_cmake_standard(content: &str, variable: &str) -> Option<String> {
 		.map(|value| value.as_str().to_string())
 }
 
-fn set_cmake_standard(content: &mut String, variable: &str, value: &str) {
-	let pattern = format!(r"set\(\s*{}\s+[0-9]+[^)]*\)", regex::escape(variable));
-	if let Ok(regex) = Regex::new(&pattern)
-		&& let Some(start) = regex.find(content)
+/// Rewrites only the *value* argument of a `set(VAR ...)` call, preserving any
+/// trailing arguments such as `CACHE STRING "..." FORCE`. Inserts a new
+/// `set()` after `project()` when the variable is not already set.
+fn set_cmake_variable_value(content: &mut String, variable: &str, raw_value: &str) {
+	if let Some(call) = cmake_parser::find_calls(content, "set")
+		.into_iter()
+		.find(|call| call.args.first().is_some_and(|name| name == variable))
 	{
-		let replacement = format!("set({} {})", variable, value);
-		content.replace_range(start.start()..start.end(), &replacement);
+		let mut args = vec![variable.to_string(), raw_value.to_string()];
+		args.extend(call.args.iter().skip(2).cloned());
+		let replacement = format!("set({})", cmake_parser::render_args(&args));
+		cmake_parser::replace_span(content, call.start_byte, call.end_byte, &replacement);
+		return;
+	}
+	// Fallback to legacy single-line scan for files the parser skips.
+	if let Some(replacement) = content
+		.lines()
+		.find(|line| is_cmake_set(line, variable))
+		.and_then(|line| replace_cmake_string_value(line, variable, raw_value))
+	{
+		*content = replacement;
+		return;
+	}
+	let addition = format!(
+		"set({} {})\n",
+		variable,
+		cmake_parser::render_arg(raw_value)
+	);
+	let target_position = ["add_executable", "add_library"]
+		.iter()
+		.flat_map(|command| cmake_parser::find_calls(content, command))
+		.map(|call| call.start_byte)
+		.min();
+	if let Some(position) = target_position {
+		content.insert_str(position, &addition);
+	} else {
+		insert_after_project(content, &addition);
+	}
+}
+
+fn set_cmake_standard(content: &mut String, variable: &str, value: &str) {
+	// Preserve trailing arguments (`CACHE ...`, `FORCE`) of an existing set().
+	if cmake_parser::find_calls(content, "set")
+		.into_iter()
+		.any(|call| call.args.first().is_some_and(|name| name == variable))
+	{
+		set_cmake_variable_value(content, variable, value);
 		return;
 	}
 	insert_after_project(content, &format!("set({} {})\n", variable, value));
@@ -545,7 +646,16 @@ fn set_cmake_standard(content: &mut String, variable: &str, value: &str) {
 
 fn ensure_cmake_standard_required(content: &mut String, variable: &str) {
 	let required = format!("{}_REQUIRED", variable);
-	if !content.contains(&required) {
+	// Use the parser so a commented-out `# set(..._REQUIRED OFF)` is not
+	// mistaken for an active setting.
+	let already_set = cmake_parser::find_calls(content, "set")
+		.into_iter()
+		.any(|call| {
+			call.args
+				.first()
+				.is_some_and(|name| name.eq_ignore_ascii_case(&required))
+		});
+	if !already_set {
 		insert_after_project(content, &format!("set({} ON)\n", required));
 	}
 }
@@ -605,25 +715,126 @@ fn replace_cmake_string_value(line: &str, variable: &str, value: &str) -> Option
 }
 
 fn set_cmake_string_variable(content: &mut String, variable: &str, value: &str) {
-	let mut lines: Vec<String> = content.lines().map(str::to_string).collect();
-	for line in &mut lines {
-		if is_cmake_set(line, variable) {
-			*line = replace_cmake_string_value(line, variable, value)
-				.unwrap_or_else(|| format!("set({} \"{}\")", variable, value));
-			*content = lines.join("\n");
-			return;
+	set_cmake_variable_value(content, variable, value);
+}
+
+/// Computes the new value for a `CMAKE_*_FLAGS` variable.
+///
+/// The existing value is preserved verbatim so content the flag parser cannot
+/// represent (generator expressions, `-isystem` paths) survives. Only flags
+/// that are genuinely new are appended, and `None` means "nothing to write",
+/// which avoids emitting a no-op `set(VAR "${VAR}")` on every invocation.
+fn build_cmake_flags_value(content: &str, variable: &str, flags: &CompilerFlags) -> Option<String> {
+	let existing = extract_cmake_string_variable(content, variable).unwrap_or_default();
+	let present: Vec<&str> = existing.split_whitespace().collect();
+	let additions: Vec<&str> = flags
+		.flags
+		.iter()
+		.map(String::as_str)
+		.filter(|flag| !present.contains(flag))
+		.collect();
+	if additions.is_empty() {
+		return None;
+	}
+	let prefix = match existing.trim() {
+		"" => format!("${{{variable}}}"),
+		value => value.to_string(),
+	};
+	Some(format!("{} {}", prefix, additions.join(" ")))
+}
+
+/// Rewrites a path-accepting CMake command (`target_include_directories`,
+/// `link_directories`) while preserving everything the path model cannot
+/// represent: scope keywords (`SYSTEM`, `INTERFACE`, `BEFORE`, `AFTER`, ...)
+/// and generator expressions such as `$<BUILD_INTERFACE:...>`.
+fn merge_path_call(content: &mut String, command: &str, dirs: &[String]) -> Result<()> {
+	let is_keyword = |value: &str| is_cmake_keyword(value);
+
+	let calls = cmake_parser::find_calls(content, command);
+	if !calls.is_empty() {
+		for call in calls.iter().rev() {
+			let Some(target) = call.args.first().cloned() else {
+				continue;
+			};
+			let mut args: Vec<String> = vec![target];
+			// Preserve the original keyword/genex prefix, in order.
+			for argument in call.args.iter().skip(1) {
+				if is_keyword(argument) {
+					args.push(argument.clone());
+				}
+			}
+			if args.len() == 1 && !dirs.is_empty() {
+				args.push("PRIVATE".to_string());
+			}
+			args.extend(
+				dirs.iter()
+					.map(|dir| cmake_parser::render_arg(&cmake_path_expression(dir))),
+			);
+
+			if args.len() <= 1 {
+				// Nothing left to express: drop the whole call.
+				let mut end = call.end_byte;
+				if content.as_bytes().get(end) == Some(&b'\n') {
+					end += 1;
+				}
+				content.replace_range(call.start_byte..end, "");
+				continue;
+			}
+			let replacement = format!("{}({})", command, cmake_parser::render_args(&args));
+			cmake_parser::replace_span(content, call.start_byte, call.end_byte, &replacement);
+		}
+	} else if !dirs.is_empty() {
+		// No existing call: add one for every declared target.
+		let mut declarations: Vec<String> = Vec::new();
+		for target_command in ["add_executable", "add_library"] {
+			for call in cmake_parser::find_calls(content, target_command) {
+				if let Some(target) = call.args.first().cloned() {
+					declarations.push(target);
+				}
+			}
+		}
+		for target in &declarations {
+			let insertion = format!("{}({} PRIVATE {})\n", command, target, dirs.join(" "));
+			insert_after_last_target(content, &insertion);
 		}
 	}
-	let addition = format!("set({} \"{}\")\n", variable, value);
-	let target_position = ["add_executable(", "add_library("]
+
+	Ok(())
+}
+
+/// Inserts `addition` after the last `add_executable`/`add_library` call.
+fn insert_after_last_target(content: &mut String, addition: &str) {
+	let position = ["add_executable", "add_library"]
 		.iter()
-		.filter_map(|needle| content.find(needle))
-		.min();
-	if let Some(position) = target_position {
-		content.insert_str(position, &addition);
+		.flat_map(|command| cmake_parser::find_calls(content, command))
+		.map(|call| call.end_byte)
+		.max();
+	if let Some(position) = position {
+		let insert_at = content[position..]
+			.find('\n')
+			.map(|offset| position + offset + 1)
+			.unwrap_or(content.len());
+		content.insert_str(insert_at.min(content.len()), addition);
 	} else {
-		insert_after_project(content, &addition);
+		insert_after_project(content, addition);
 	}
+}
+
+/// CMake keywords that may appear in a target command's argument list but are
+/// not values the path/def model can represent.
+const CMAKE_KEYWORDS: [&str; 6] = [
+	"PUBLIC",
+	"PRIVATE",
+	"INTERFACE",
+	"SYSTEM",
+	"BEFORE",
+	"AFTER",
+];
+
+/// True when `value` is a keyword or a generator expression rather than a
+/// concrete value the configuration model can round-trip.
+fn is_cmake_keyword(value: &str) -> bool {
+	CMAKE_KEYWORDS.contains(&value) || value.starts_with("$<")
 }
 
 fn extract_target_arguments(content: &str, command: &str) -> Vec<String> {
@@ -631,20 +842,15 @@ fn extract_target_arguments(content: &str, command: &str) -> Vec<String> {
 }
 
 fn extract_call_arguments(content: &str, command: &str) -> Vec<String> {
-	let pattern = format!(r"(?m){}[ \t]*\(([^)]*)\)", regex::escape(command));
-	let Some(regex) = Regex::new(&pattern).ok() else {
-		return Vec::new();
-	};
-	regex
-		.captures_iter(content)
-		.filter_map(|captures| captures.get(1))
-		.flat_map(|captures| {
-			captures
-				.as_str()
-				.split_whitespace()
+	// Multiline- and quote-aware: a `[^)]*` regex truncates at the first
+	// closing paren inside a generator expression.
+	cmake_parser::find_calls(content, command)
+		.into_iter()
+		.flat_map(|call| {
+			call.args
+				.into_iter()
 				.skip(if command.starts_with("target_") { 1 } else { 0 })
-				.filter(|value| *value != "PRIVATE" && *value != "PUBLIC" && *value != "INTERFACE")
-				.map(|value| value.trim_matches('"').to_string())
+				.filter(|value| !is_cmake_keyword(value))
 				.collect::<Vec<_>>()
 		})
 		.collect()
@@ -666,31 +872,113 @@ fn normalize_cmake_path(value: &str) -> String {
 
 fn cmake_path_expression(value: &str) -> String {
 	let value = normalize_cmake_path(value);
-	if Path::new(&value).is_absolute() || value.contains("${") {
-		if value.contains(' ') {
-			format!("\"{}\"", value)
-		} else {
-			value
-		}
-	} else if value.contains(' ') {
-		format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", value)
-	} else {
-		format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", value)
+	// Generator expressions and variable references must pass through
+	// untouched; prefixing them with a source dir would change their meaning.
+	if value.starts_with("$") || value.contains("$<") {
+		return value;
 	}
+	if Path::new(&value).is_absolute() || value.contains("${") {
+		return value;
+	}
+	format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", value)
 }
 
 fn insert_after_project(content: &mut String, addition: &str) {
-	if let Some(position) = content.find("project(")
-		&& let Some(newline) = content[position..].find('\n')
+	if let Some(call) = cmake_parser::find_calls(content, "project")
+		.into_iter()
+		.next()
 	{
-		let insert_at = position + newline + 1;
+		// Insert after the end of project(), even when it spans lines.
+		// Without a trailing newline the call ends the file, so append a
+		// newline first rather than splicing onto the same line.
+		if !content.ends_with('\n') {
+			content.push('\n');
+		}
+		let insert_at = call
+			.end_byte
+			.checked_add(
+				content[call.end_byte..]
+					.find('\n')
+					.map(|offset| offset + 1)
+					.unwrap_or(0),
+			)
+			.unwrap_or(content.len())
+			.min(content.len());
 		content.insert_str(insert_at, addition);
-	} else {
-		content.push_str(addition);
+		return;
 	}
+	content.push_str(addition);
 }
 
 fn replace_target_call(content: &mut String, command: &str, values: &str) -> Result<()> {
+	// Multiline-aware rewrite using byte spans. Preserves per-target scope.
+	let calls = cmake_parser::find_calls(content, command);
+	if !calls.is_empty() {
+		let mut seen_targets = Vec::new();
+		// Replace in reverse so earlier byte offsets stay valid.
+		for call in calls.iter().rev() {
+			let Some(target) = call.args.first().cloned() else {
+				continue;
+			};
+			seen_targets.push(target.clone());
+			if values.is_empty() {
+				let mut updated = content.clone();
+				let mut end = call.end_byte;
+				if updated.as_bytes().get(end) == Some(&b'\n') {
+					end += 1;
+				}
+				updated.replace_range(call.start_byte..end, "");
+				*content = updated;
+			} else {
+				let scope = call
+					.args
+					.get(1)
+					.filter(|value| matches!(value.as_str(), "PUBLIC" | "PRIVATE" | "INTERFACE"))
+					.cloned()
+					.unwrap_or_else(|| "PRIVATE".to_string());
+				let replacement = format!("{}({} {} {})\n", command, target, scope, values);
+				cmake_parser::replace_span(
+					content,
+					call.start_byte,
+					call.end_byte,
+					replacement.trim_end(),
+				);
+				// Ensure trailing newline after replacement when original had one.
+				if !content.ends_with('\n') {
+					content.push('\n');
+				}
+			}
+		}
+		if !values.is_empty() {
+			// Add missing per-target calls for targets declared elsewhere.
+			let mut declarations = Vec::new();
+			for target_command in ["add_executable", "add_library"] {
+				for call in cmake_parser::find_calls(content, target_command) {
+					if let Some(target) = call.args.first().cloned() {
+						declarations.push((call.end_line, target));
+					}
+				}
+			}
+			let mut missing = declarations
+				.into_iter()
+				.filter(|(_, target)| !seen_targets.iter().any(|seen| seen == target))
+				.collect::<Vec<_>>();
+			missing.sort_by_key(|(index, _)| std::cmp::Reverse(*index));
+			for (index, target) in missing {
+				let mut lines = content.lines().map(str::to_string).collect::<Vec<_>>();
+				lines.insert(
+					(index + 1).min(lines.len()),
+					format!("{}({} PRIVATE {})", command, target, values),
+				);
+				*content = lines.join("\n");
+			}
+			if !content.ends_with('\n') {
+				content.push('\n');
+			}
+		}
+		return Ok(());
+	}
+	// Legacy single-line fallback (kept for files the parser skips).
 	let pattern = format!(
 		r"(?m)^[ \t]*{}[ \t]*\([^)]*\)[ \t]*$",
 		regex::escape(command)
@@ -754,39 +1042,6 @@ fn replace_target_call(content: &mut String, command: &str, values: &str) -> Res
 	Ok(())
 }
 
-fn replace_call(content: &mut String, command: &str, values: &str) -> Result<()> {
-	let pattern = format!(
-		r"(?m)^[ \t]*{}[ \t]*\([^)]*\)[ \t]*$",
-		regex::escape(command)
-	);
-	let regex = Regex::new(&pattern).map_err(|error| anyhow::anyhow!(error))?;
-	let mut found = false;
-	let mut output = String::new();
-	for line in content.lines() {
-		if regex.is_match(line) {
-			found = true;
-			if !values.is_empty() {
-				output.push_str(&format!("{}({})\n", command, values));
-			}
-		} else {
-			output.push_str(line);
-			output.push('\n');
-		}
-	}
-	*content = output;
-	if !found && !values.is_empty() {
-		insert_after_project(content, &format!("{}({})\n", command, values));
-	}
-	Ok(())
-}
-
 fn cmake_call_tokens(line: &str, command: &str) -> Option<Vec<String>> {
-	let start = line.find(&format!("{}(", command))? + command.len() + 1;
-	let end = line[start..].find(')')? + start;
-	Some(
-		line[start..end]
-			.split_whitespace()
-			.map(|value| value.trim_matches('"').to_string())
-			.collect(),
-	)
+	cmake_parser::call_arguments(line, command).ok()
 }

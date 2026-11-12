@@ -2,12 +2,13 @@ pub mod build_config;
 pub mod build_systems;
 pub mod ci_cd;
 pub mod cmake_dependencies;
+pub mod cmake_parser;
 pub mod constants;
 pub mod dependencies;
 pub mod dependency_manager;
 pub mod docs;
 pub mod features;
-mod file_handler;
+pub mod file_handler;
 pub mod interactive;
 pub mod languages;
 pub mod makefile_parser;
@@ -15,10 +16,12 @@ pub mod multi_target;
 pub mod os_detect;
 pub mod package_checker;
 pub mod package_managers;
+pub mod project_ops;
 pub mod sources;
 pub mod static_analysis;
 pub mod templates;
 pub mod test_framework;
+pub mod toolchain;
 pub mod updater;
 
 pub use build_config::{
@@ -29,16 +32,21 @@ pub use build_systems::{
 };
 pub use ci_cd::{CiCdGenerator, CiPlatform};
 pub use cmake_dependencies::CMakeDependencyManager;
-pub use dependencies::{add_dependencies, remove_dependencies};
+pub use dependencies::{
+	add_dependencies, add_dependencies_with_options, remove_dependencies,
+	remove_dependencies_with_options,
+};
 pub use dependency_manager::DependencyManager;
 pub use docs::{DocGenerator, DocTool};
 pub use features::{
 	add_package_manager_to_project, convert_build_system, convert_build_system_interactive,
-	detect_build_file, detect_build_system, detect_package_manager, list_features,
-	remove_package_manager_from_project,
+	detect_build_file, detect_build_file_in, detect_build_system, detect_build_system_in,
+	detect_package_manager, detect_package_manager_in, eject_project, eject_project_in,
+	list_features, remove_package_manager_from_project,
 };
 pub use file_handler::{
-	create_dir, project_path, validate_project_name, write_atomic, write_new_file,
+	create_dir, project_path, project_path_in, set_dry_run, set_force, validate_project_name,
+	write_atomic, write_new_file,
 };
 pub use languages::{Language, LanguageConsts};
 pub use makefile_parser::Makefile;
@@ -46,10 +54,12 @@ pub use multi_target::{BuildTarget, MultiTargetManager, TargetType};
 pub use package_managers::{
 	PackageManager, PackageManagerGenerator, get_package_manager_generator,
 };
+pub use project_ops::{build_project, clean_project, run_project, test_project};
 pub use sources::add_sources;
 pub use static_analysis::{StaticAnalysisGenerator, StaticAnalysisTool};
 pub use templates::*;
 pub use test_framework::{TestFramework, TestFrameworkManager};
+pub use toolchain::Toolchain;
 pub use updater::update_project;
 
 use anyhow::{Context, Result};
@@ -67,7 +77,15 @@ pub fn create_project_with_system(
 	build_system: BuildSystem,
 ) -> Result<()> {
 	let root = std::env::current_dir().context("Failed to get current directory")?;
-	create_project_in(&root, project_name, language, build_system, None, false)
+	create_project_in(
+		&root,
+		project_name,
+		language,
+		build_system,
+		None,
+		false,
+		&Toolchain::default(),
+	)
 }
 
 pub fn create_project_with_system_and_pm(
@@ -84,7 +102,36 @@ pub fn create_project_with_system_and_pm(
 		build_system,
 		Some(package_manager),
 		false,
+		&Toolchain::default(),
 	)
+}
+
+/// Like [`new_project_with_system_and_pm`] but honours explicit compiler
+/// overrides (`--cc`/`--cxx`). Empty fields are auto-detected.
+pub fn new_project_with_system_and_pm_and_toolchain(
+	project_name: &str,
+	language: Language,
+	build_system: BuildSystem,
+	package_manager: Option<PackageManager>,
+	toolchain: &Toolchain,
+) -> Result<()> {
+	validate_project_name(project_name)?;
+	let root = project_path(project_name)?;
+	fs::create_dir(&root)
+		.with_context(|| format!("Failed to create directory '{}'", project_name))?;
+	let result = create_project_in(
+		&root,
+		project_name,
+		language,
+		build_system,
+		package_manager,
+		true,
+		toolchain,
+	);
+	if result.is_err() {
+		let _ = fs::remove_dir_all(&root);
+	}
+	result
 }
 
 fn create_project_in(
@@ -94,6 +141,7 @@ fn create_project_in(
 	build_system: BuildSystem,
 	package_manager: Option<PackageManager>,
 	validate_name: bool,
+	toolchain: &Toolchain,
 ) -> Result<()> {
 	if validate_name {
 		validate_project_name(project_name)?;
@@ -109,7 +157,8 @@ fn create_project_in(
 	let project_id = project_build_name(project_name);
 	let hello_world_content = language.generate_helloworld_content();
 	let generator = get_generator(build_system);
-	let build_file_content = generator.generate_build_file(language, &project_id);
+	let build_file_content =
+		generator.generate_build_file_with_toolchain(language, &project_id, toolchain);
 
 	let src_dir = root.join("src");
 	let include_dir = root.join("include");
@@ -136,6 +185,9 @@ fn create_project_in(
 	if let Some(pm) = package_manager {
 		let pm_generator = get_package_manager_generator(pm);
 		generated_files.push(root.join(pm_generator.extension()));
+	}
+	if build_system == BuildSystem::CMake {
+		generated_files.push(root.join("CMakePresets.json"));
 	}
 
 	for path in &generated_files {
@@ -175,6 +227,15 @@ fn create_project_in(
 	fs::create_dir_all(&include_dir).context("Failed to create include directory")?;
 	write_new_file(&source_file, &hello_world_content)?;
 	write_new_file(&root.join(generator.extension()), &build_file_content)?;
+	if build_system == BuildSystem::CMake {
+		write_new_file(
+			&root.join("CMakePresets.json"),
+			&project_ops::generate_cmake_presets(
+				package_manager == Some(PackageManager::Conan),
+				project_ops::ninja_available(),
+			),
+		)?;
+	}
 	write_new_file(
 		&root.join(".gitignore"),
 		&templates::generate_gitignore(language),
@@ -266,6 +327,7 @@ pub fn new_project_with_system_and_pm(
 		build_system,
 		package_manager,
 		true,
+		&Toolchain::default(),
 	);
 	if result.is_err() {
 		let _ = fs::remove_dir_all(&root);
@@ -289,10 +351,40 @@ pub fn init_project_with_system_and_pm(
 	init_project_with_system_and_pm_internal(language, build_system, Some(package_manager))
 }
 
+/// Like [`init_project_with_system_and_pm`] but honours explicit compiler
+/// overrides (`--cc`/`--cxx`). Empty fields are auto-detected.
+pub fn init_project_with_system_and_pm_and_toolchain(
+	language: Language,
+	build_system: BuildSystem,
+	package_manager: Option<PackageManager>,
+	toolchain: &Toolchain,
+) -> Result<()> {
+	init_project_with_system_and_pm_toolchain_internal(
+		language,
+		build_system,
+		package_manager,
+		toolchain,
+	)
+}
+
 fn init_project_with_system_and_pm_internal(
 	language: Language,
 	build_system: BuildSystem,
 	package_manager: Option<PackageManager>,
+) -> Result<()> {
+	init_project_with_system_and_pm_toolchain_internal(
+		language,
+		build_system,
+		package_manager,
+		&Toolchain::default(),
+	)
+}
+
+fn init_project_with_system_and_pm_toolchain_internal(
+	language: Language,
+	build_system: BuildSystem,
+	package_manager: Option<PackageManager>,
+	toolchain: &Toolchain,
 ) -> Result<()> {
 	let current_dir = std::env::current_dir().context("Failed to get current directory")?;
 	let current_dir_name = current_dir
@@ -307,6 +399,7 @@ fn init_project_with_system_and_pm_internal(
 		build_system,
 		package_manager,
 		false,
+		toolchain,
 	)?;
 	println!("Initialized {} project in current directory", language);
 	Ok(())
@@ -345,11 +438,7 @@ pub(crate) fn configure_package_manager_build(
 			}
 		}
 		(PackageManager::Conan, BuildSystem::CMake) => {
-			let path = root.join("CMakePresets.json");
-			if !path.exists() {
-				let preset = "{\"version\":3,\"configurePresets\":[{\"name\":\"conan\",\"binaryDir\":\"${sourceDir}/build\",\"cacheVariables\":{\"CMAKE_TOOLCHAIN_FILE\":\"${sourceDir}/build/conan_toolchain.cmake\"}}]}\n";
-				file_handler::write_atomic(&path, preset)?;
-			}
+			project_ops::ensure_cmake_presets(root)?;
 		}
 		(PackageManager::Conan, BuildSystem::Makefile) => {
 			anyhow::bail!("Conan integration is supported only with CMake")
