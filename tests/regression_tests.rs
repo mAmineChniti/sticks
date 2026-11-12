@@ -198,7 +198,14 @@ fn makefile_recipe_prefix_is_preserved() {
 			"a TAB recipe would make the Makefile unparseable:\n{rendered}"
 		);
 	}
-	assert!(rendered.contains(">sudo"), "{rendered}");
+	// The install command varies by OS package manager (apt/pacman/brew/
+	// choco/scoop) — assert a '>'-prefixed recipe line naming the package.
+	assert!(
+		rendered
+			.lines()
+			.any(|line| line.starts_with('>') && line.contains("libcurl")),
+		"{rendered}"
+	);
 }
 
 #[test]
