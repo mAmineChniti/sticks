@@ -5,6 +5,7 @@ use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 
 pub fn run_interactive() -> Result<()> {
+	ensure_interactive_terminal()?;
 	println!("\n🎯 Welcome to sticks - Interactive Mode\n");
 
 	print!("📝 Enter project name: ");
@@ -61,6 +62,7 @@ fn interactive_select(options: &[&str]) -> Result<usize> {
 	if options.is_empty() {
 		anyhow::bail!("No interactive options were provided");
 	}
+	ensure_interactive_terminal()?;
 
 	let mut selected = 0;
 	let num_options = options.len();
@@ -170,6 +172,25 @@ impl RawModeGuard {
 	}
 }
 
+/// Interactive mode needs a real terminal. Without this check a piped or
+/// CI invocation fails deep inside `tcgetattr` with a confusing
+/// "Inappropriate ioctl for device".
+#[cfg(unix)]
+pub fn ensure_interactive_terminal() -> Result<()> {
+	if unsafe { libc::isatty(libc::STDIN_FILENO) } == 1 {
+		Ok(())
+	} else {
+		anyhow::bail!(
+			"Interactive mode requires a terminal. Use 'sticks c <name>' or 'sticks cpp <name>' instead."
+		)
+	}
+}
+
+#[cfg(not(unix))]
+pub fn ensure_interactive_terminal() -> Result<()> {
+	Ok(())
+}
+
 fn read_key() -> Result<String> {
 	let mut first = [0; 1];
 	let bytes_read = io::stdin()
@@ -181,18 +202,33 @@ fn read_key() -> Result<String> {
 
 	match first[0] {
 		b'\n' | b'\r' => return Ok("ENTER".to_string()),
-		3 => return Ok("INTERRUPT".to_string()),
+		// Ctrl-C, Ctrl-Z and Ctrl-\ all mean "cancel". ISIG is cleared in raw
+		// mode, so these arrive as ordinary bytes and must be handled here.
+		3 | 26 | 28 => return Ok("INTERRUPT".to_string()),
+		b'q' | b'Q' => return Ok("INTERRUPT".to_string()),
 		27 => {
-			let Some(second) = read_escape_byte()? else {
-				return Ok(String::new());
-			};
-			if second != b'[' {
-				return Ok(String::new());
+			// Arrow keys deliver `ESC [ A` in a single burst, so reading the
+			// rest from the same buffered handle cannot block on a real key
+			// press. A lone ESC means "cancel".
+			//
+			// Reading these from the buffered `Stdin` (rather than polling the
+			// raw fd) matters: the previous read may already have buffered the
+			// rest of the burst, in which case a raw poll reports "no data"
+			// and the key press is silently dropped.
+			let mut sequence = [0; 2];
+			match io::stdin().read_exact(&mut sequence) {
+				Ok(()) => {}
+				Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => {
+					anyhow::bail!("Interactive input ended before a selection was made");
+				}
+				Err(error) => {
+					return Err(error).context("Failed to read interactive escape sequence");
+				}
 			}
-			let Some(third) = read_escape_byte()? else {
-				return Ok(String::new());
-			};
-			return Ok(match third {
+			if sequence[0] != b'[' {
+				return Ok("INTERRUPT".to_string());
+			}
+			return Ok(match sequence[1] {
 				b'A' => "UP".to_string(),
 				b'B' => "DOWN".to_string(),
 				_ => String::new(),
@@ -202,37 +238,6 @@ fn read_key() -> Result<String> {
 	}
 
 	Ok(String::new())
-}
-
-#[cfg(unix)]
-fn read_escape_byte() -> Result<Option<u8>> {
-	let stdin_fd = io::stdin().as_raw_fd();
-	let mut descriptor = libc::pollfd {
-		fd: stdin_fd,
-		events: libc::POLLIN,
-		revents: 0,
-	};
-	let result = unsafe { libc::poll(&mut descriptor, 1, 100) };
-	if result == 0 {
-		return Ok(None);
-	}
-	if result < 0 {
-		return Err(io::Error::last_os_error()).context("Failed to wait for interactive input");
-	}
-	let mut byte = [0; 1];
-	let bytes_read = io::stdin()
-		.read(&mut byte)
-		.context("Failed to read interactive escape sequence")?;
-	Ok((bytes_read == 1).then_some(byte[0]))
-}
-
-#[cfg(not(unix))]
-fn read_escape_byte() -> Result<Option<u8>> {
-	let mut byte = [0; 1];
-	let bytes_read = io::stdin()
-		.read(&mut byte)
-		.context("Failed to read interactive escape sequence")?;
-	Ok((bytes_read == 1).then_some(byte[0]))
 }
 
 pub fn select_language() -> Language {

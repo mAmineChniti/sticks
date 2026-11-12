@@ -34,6 +34,15 @@ impl FromStr for BuildSystem {
 pub trait BuildSystemGenerator {
 	fn name(&self) -> &'static str;
 	fn generate_build_file(&self, language: Language, project_name: &str) -> String;
+	fn generate_build_file_with_toolchain(
+		&self,
+		language: Language,
+		project_name: &str,
+		toolchain: &crate::toolchain::Toolchain,
+	) -> String {
+		let _ = toolchain;
+		self.generate_build_file(language, project_name)
+	}
 	fn extension(&self) -> &'static str;
 }
 
@@ -46,6 +55,15 @@ impl BuildSystemGenerator for MakefileGenerator {
 
 	fn generate_build_file(&self, language: Language, project_name: &str) -> String {
 		language.generate_makefile_content(project_name)
+	}
+
+	fn generate_build_file_with_toolchain(
+		&self,
+		language: Language,
+		project_name: &str,
+		toolchain: &crate::toolchain::Toolchain,
+	) -> String {
+		language.generate_makefile_content_with(project_name, Some(toolchain))
 	}
 
 	fn extension(&self) -> &'static str {
@@ -61,15 +79,41 @@ impl BuildSystemGenerator for CMakeGenerator {
 	}
 
 	fn generate_build_file(&self, language: Language, project_name: &str) -> String {
+		self.generate_build_file_with_toolchain(language, project_name, &Default::default())
+	}
+
+	fn generate_build_file_with_toolchain(
+		&self,
+		language: Language,
+		project_name: &str,
+		toolchain: &crate::toolchain::Toolchain,
+	) -> String {
 		let project_name = crate::project_build_name(project_name);
+		// Only explicit overrides are pinned; otherwise CMake picks the
+		// platform toolchain itself.
+		let (lang, compiler_var, compiler) = match language {
+			Language::C => ("C", "CMAKE_C_COMPILER", toolchain.cc.as_deref()),
+			Language::Cpp => ("CXX", "CMAKE_CXX_COMPILER", toolchain.cxx.as_deref()),
+		};
+		let compiler_prelude = compiler.map_or_else(String::new, |name| {
+			format!("set({compiler_var} \"{name}\")\n")
+		});
+		let warning_flags = match language {
+			Language::C => "CMAKE_C_FLAGS",
+			Language::Cpp => "CMAKE_CXX_FLAGS",
+		};
+		let flags_guard = format!(
+			"if(NOT MSVC)\n\tset({warning_flags} \"${{{warning_flags}}} -Wall -Wextra -Werror\")\nendif()\n"
+		);
 		match language {
 			Language::C => format!(
 				"cmake_minimum_required(VERSION 3.21)\n\
-				project({} C)\n\
+				{compiler_prelude}\
+				project({project_name} {lang})\n\
 				\n\
 				set(CMAKE_C_STANDARD 11)\n\
 				set(CMAKE_C_STANDARD_REQUIRED ON)\n\
-				set(CMAKE_C_FLAGS \"${{CMAKE_C_FLAGS}} -Wall -Wextra -Werror\")\n\
+				{flags_guard}\
 				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
 				\n\
 				file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS \"src/*.c\")\n\
@@ -78,16 +122,16 @@ impl BuildSystemGenerator for CMakeGenerator {
 				target_include_directories(${{PROJECT_NAME}} PRIVATE \"${{CMAKE_CURRENT_SOURCE_DIR}}/include\")\n\
 				\n\
 				# Optional: Installation\n\
-				install(TARGETS ${{PROJECT_NAME}} DESTINATION bin)\n",
-				project_name
+				install(TARGETS ${{PROJECT_NAME}} DESTINATION bin)\n"
 			),
 			Language::Cpp => format!(
 				"cmake_minimum_required(VERSION 3.21)\n\
-				project({} CXX)\n\
+				{compiler_prelude}\
+				project({project_name} {lang})\n\
 				\n\
 				set(CMAKE_CXX_STANDARD 17)\n\
 				set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\
-				set(CMAKE_CXX_FLAGS \"${{CMAKE_CXX_FLAGS}} -Wall -Wextra -Werror\")\n\
+				{flags_guard}\
 				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
 				\n\
 				file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS \"src/*.cpp\" \"src/*.cc\" \"src/*.cxx\" \"src/*.c++\" \"src/*.C\" \"src/*.CPP\" \"src/*.CC\" \"src/*.CXX\")\n\
@@ -96,8 +140,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 				target_include_directories(${{PROJECT_NAME}} PRIVATE \"${{CMAKE_CURRENT_SOURCE_DIR}}/include\")\n\
 				\n\
 				# Optional: Installation\n\
-				install(TARGETS ${{PROJECT_NAME}} DESTINATION bin)\n",
-				project_name
+				install(TARGETS ${{PROJECT_NAME}} DESTINATION bin)\n"
 			),
 		}
 	}

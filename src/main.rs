@@ -2,14 +2,14 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
 use sticks::{
-	Language, add_dependencies, add_sources,
+	Language, add_dependencies_with_options, add_sources,
 	build_config::{BuildConfig, CppStandard},
 	ci_cd::CiCdGenerator,
 	ci_cd::CiPlatform,
 	docs::DocGenerator,
 	docs::DocTool,
 	multi_target::{BuildTarget, MultiTargetManager, TargetType},
-	remove_dependencies,
+	remove_dependencies_with_options,
 	static_analysis::StaticAnalysisGenerator,
 	static_analysis::StaticAnalysisTool,
 	test_framework::TestFrameworkManager,
@@ -19,10 +19,21 @@ use sticks::{
 #[derive(Parser)]
 #[command(name = "sticks")]
 #[command(version, about = "A tool for managing C and C++ projects")]
-#[command(args_conflicts_with_subcommands = true)]
 struct Cli {
 	#[command(subcommand)]
 	command: Option<Commands>,
+	#[arg(
+		long,
+		global = true,
+		help = "Preview file changes as a diff without writing anything"
+	)]
+	dry_run: bool,
+	#[arg(
+		long,
+		global = true,
+		help = "Allow overwriting existing files (a .sticks.bak backup is kept)"
+	)]
+	force: bool,
 }
 
 #[derive(Subcommand)]
@@ -42,6 +53,10 @@ enum Commands {
 		build: String,
 		#[arg(long, short = 'p', help = "Package manager: 'conan' or 'vcpkg'")]
 		package_manager: Option<String>,
+		#[arg(long, help = "C compiler to use (e.g. gcc, clang, cl)")]
+		cc: Option<String>,
+		#[arg(long, help = "C++ compiler to use (e.g. g++, clang++, cl)")]
+		cxx: Option<String>,
 	},
 	#[command(about = "Create a new C++ project in a subdirectory")]
 	#[command(
@@ -58,6 +73,10 @@ enum Commands {
 		build: String,
 		#[arg(long, short = 'p', help = "Package manager: 'conan' or 'vcpkg'")]
 		package_manager: Option<String>,
+		#[arg(long, help = "C compiler to use (e.g. gcc, clang, cl)")]
+		cc: Option<String>,
+		#[arg(long, help = "C++ compiler to use (e.g. g++, clang++, cl)")]
+		cxx: Option<String>,
 	},
 	#[command(about = "Initialize a project in the current directory")]
 	#[command(
@@ -76,19 +95,37 @@ enum Commands {
 		build: String,
 		#[arg(long, short = 'p', help = "Package manager: 'conan' or 'vcpkg'")]
 		package_manager: Option<String>,
+		#[arg(long, help = "C compiler to use (e.g. gcc, clang, cl)")]
+		cc: Option<String>,
+		#[arg(long, help = "C++ compiler to use (e.g. g++, clang++, cl)")]
+		cxx: Option<String>,
 	},
 	#[command(about = "Add dependencies to your project")]
 	#[command(
 		after_help = "Examples:\n  sticks add libcurl            # Add single dependency\n  sticks a libcurl openssl      # Add multiple dependencies\n  sticks add sqlite3 pthread    # Add libraries for C project\n\nSupports: Makefile (via apt), CMake (via find_package), Conan, Vcpkg"
 	)]
 	#[command(visible_alias = "a")]
-	Add { dependency_name: Vec<String> },
+	Add {
+		dependency_name: Vec<String>,
+		#[arg(
+			long,
+			help = "Manage system packages (installs OS packages via the detected package manager)"
+		)]
+		system: bool,
+	},
 	#[command(about = "Remove dependencies from your project")]
 	#[command(
 		after_help = "Examples:\n  sticks remove libcurl         # Remove single dependency\n  sticks r libcurl openssl      # Remove multiple dependencies\n  sticks remove sqlite3         # Remove library from project\n\nSupports: Makefile (via apt), CMake (via find_package), Conan, Vcpkg"
 	)]
 	#[command(visible_alias = "r")]
-	Remove { dependency_name: Vec<String> },
+	Remove {
+		dependency_name: Vec<String>,
+		#[arg(
+			long,
+			help = "Manage system packages (removes OS packages via the detected package manager)"
+		)]
+		system: bool,
+	},
 	#[command(about = "Add new source files to your project")]
 	#[command(
 		after_help = "Examples:\n  sticks src utils              # Add utils.c/.cpp\n  sticks s math parser          # Add multiple source files\n  sticks src database           # Add database.c/.cpp"
@@ -116,15 +153,47 @@ enum Commands {
 		#[command(subcommand)]
 		action: ConfigAction,
 	},
-	#[command(about = "Add test framework to project")]
+	#[command(about = "Build the project with its build system (make or cmake)")]
 	#[command(
-		after_help = "Examples:\n  sticks test add gtest            # Add GoogleTest framework\n  sticks test add catch2           # Add Catch2 framework\n  sticks test add doctest          # Add Doctest framework"
+		after_help = "Examples:\n  sticks build            # Debug build\n  sticks build --release  # Release build"
+	)]
+	Build {
+		#[arg(
+			long,
+			help = "Build with optimizations (CMAKE_BUILD_TYPE=Release / make default)"
+		)]
+		release: bool,
+	},
+	#[command(about = "Build and run the project")]
+	#[command(
+		after_help = "Examples:\n  sticks run               # Debug build, then run\n  sticks run --release     # Release build, then run\n  sticks run -- --flag     # Pass arguments to the program"
+	)]
+	Run {
+		#[arg(long, help = "Build with optimizations before running")]
+		release: bool,
+		#[arg(long, help = "Run the existing binary without rebuilding")]
+		no_build: bool,
+		#[arg(last = true, help = "Arguments passed to the program (after `--`)")]
+		args: Vec<String>,
+	},
+	#[command(about = "Run the project's tests")]
+	#[command(
+		after_help = "Examples:\n  sticks test              # Run tests (debug)\n  sticks test --release    # Run tests (release)"
 	)]
 	#[command(visible_alias = "t")]
 	Test {
 		#[command(subcommand)]
-		action: TestAction,
+		action: Option<TestAction>,
+		#[arg(long, help = "Run tests in release configuration")]
+		release: bool,
 	},
+	#[command(about = "Remove build artifacts")]
+	Clean,
+	#[command(about = "Remove sticks-specific metadata, leaving a plain working project")]
+	#[command(
+		after_help = "Examples:\n  sticks eject    # Move .vscode/, CMakePresets.json, .clang-format etc. to .sticks.bak backups"
+	)]
+	Eject,
 	#[command(about = "Generate CI/CD configuration")]
 	#[command(
 		after_help = "Examples:\n  sticks ci generate github         # Generate GitHub Actions workflow\n  sticks ci generate gitlab          # Generate GitLab CI configuration"
@@ -159,6 +228,13 @@ enum Commands {
 		#[command(subcommand)]
 		action: LintAction,
 	},
+	#[command(about = "Print shell completion script to stdout")]
+	Completions {
+		#[arg(value_parser = ["bash", "zsh", "fish", "powershell", "elvish"])]
+		shell: String,
+	},
+	#[command(about = "Print a man page (roff) to stdout")]
+	Man,
 }
 
 #[derive(Subcommand)]
@@ -345,6 +421,8 @@ fn run() -> Result<()> {
 	let args = handle_shortcuts(args);
 
 	let cli = Cli::parse_from(&args);
+	sticks::set_dry_run(cli.dry_run);
+	sticks::set_force(cli.force);
 
 	let command = match cli.command {
 		Some(cmd) => cmd,
@@ -356,81 +434,89 @@ fn run() -> Result<()> {
 			project_name,
 			build,
 			package_manager,
+			cc,
+			cxx,
 		} => {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
+			let toolchain = sticks::Toolchain { cc, cxx };
 			for name in project_name {
-				match package_manager {
-					Some(ref pm_str) => {
-						let pm = pm_str.parse::<sticks::PackageManager>()?;
-						sticks::new_project_with_system_and_pm(
-							&name,
-							Language::C,
-							build_system,
-							Some(pm),
-						)?;
-					}
-					None => {
-						sticks::new_project_with_system(&name, Language::C, build_system)?;
-					}
-				}
+				sticks::new_project_with_system_and_pm_and_toolchain(
+					&name,
+					Language::C,
+					build_system,
+					package_manager
+						.as_deref()
+						.map(|pm| pm.parse::<sticks::PackageManager>())
+						.transpose()?,
+					&toolchain,
+				)?;
 			}
 		}
 		Commands::Cpp {
 			project_name,
 			build,
 			package_manager,
+			cc,
+			cxx,
 		} => {
 			validate_project_names(&project_name)?;
 			let build_system = build.parse::<sticks::BuildSystem>()?;
+			let toolchain = sticks::Toolchain { cc, cxx };
 			for name in project_name {
-				match package_manager {
-					Some(ref pm_str) => {
-						let pm = pm_str.parse::<sticks::PackageManager>()?;
-						sticks::new_project_with_system_and_pm(
-							&name,
-							Language::Cpp,
-							build_system,
-							Some(pm),
-						)?;
-					}
-					None => {
-						sticks::new_project_with_system(&name, Language::Cpp, build_system)?;
-					}
-				}
+				sticks::new_project_with_system_and_pm_and_toolchain(
+					&name,
+					Language::Cpp,
+					build_system,
+					package_manager
+						.as_deref()
+						.map(|pm| pm.parse::<sticks::PackageManager>())
+						.transpose()?,
+					&toolchain,
+				)?;
 			}
 		}
 		Commands::Init {
 			language,
 			build,
 			package_manager,
+			cc,
+			cxx,
 		} => {
 			let lang = match language {
 				Some(l) => l.parse::<Language>()?,
 				None => sticks::interactive::select_language_result()?,
 			};
 			let build_system = build.parse::<sticks::BuildSystem>()?;
-			match package_manager {
-				Some(pm_str) => {
-					let pm = pm_str.parse::<sticks::PackageManager>()?;
-					sticks::init_project_with_system_and_pm(lang, build_system, pm)?;
-				}
-				None => {
-					sticks::init_project_with_system(lang, build_system)?;
-				}
-			}
+			let toolchain = sticks::Toolchain { cc, cxx };
+			let pm = package_manager
+				.as_deref()
+				.map(|pm| pm.parse::<sticks::PackageManager>())
+				.transpose()?;
+			sticks::init_project_with_system_and_pm_and_toolchain(
+				lang,
+				build_system,
+				pm,
+				&toolchain,
+			)?;
 		}
-		Commands::Add { dependency_name } => {
+		Commands::Add {
+			dependency_name,
+			system,
+		} => {
 			if dependency_name.is_empty() {
 				anyhow::bail!("Please specify at least one dependency to add");
 			}
-			add_dependencies(&dependency_name)?;
+			add_dependencies_with_options(&dependency_name, system)?;
 		}
-		Commands::Remove { dependency_name } => {
+		Commands::Remove {
+			dependency_name,
+			system,
+		} => {
 			if dependency_name.is_empty() {
 				anyhow::bail!("Please specify at least one dependency to remove");
 			}
-			remove_dependencies(&dependency_name)?;
+			remove_dependencies_with_options(&dependency_name, system)?;
 		}
 		Commands::Src { source_names } => {
 			if source_names.is_empty() {
@@ -448,8 +534,24 @@ fn run() -> Result<()> {
 		Commands::Config { action } => {
 			handle_config_action(action)?;
 		}
-		Commands::Test { action } => {
-			handle_test_action(action)?;
+		Commands::Build { release } => {
+			sticks::build_project(&std::env::current_dir()?, release)?;
+		}
+		Commands::Run {
+			release,
+			no_build,
+			args,
+		} => {
+			sticks::run_project(&std::env::current_dir()?, release, &args, !no_build)?;
+		}
+		Commands::Clean => {
+			sticks::clean_project(&std::env::current_dir()?)?;
+		}
+		Commands::Eject => {
+			sticks::eject_project()?;
+		}
+		Commands::Test { action, release } => {
+			handle_test_action(action, release)?;
 		}
 		Commands::Ci { action } => {
 			handle_ci_action(action)?;
@@ -462,6 +564,39 @@ fn run() -> Result<()> {
 		}
 		Commands::Lint { action } => {
 			handle_lint_action(action)?;
+		}
+		Commands::Completions { shell } => {
+			use clap::CommandFactory;
+			let mut cmd = Cli::command();
+			let name = cmd.get_name().to_string();
+			let mut out = std::io::stdout();
+			match shell.as_str() {
+				"bash" => {
+					clap_complete::generate(clap_complete::shells::Bash, &mut cmd, name, &mut out)
+				}
+				"zsh" => {
+					clap_complete::generate(clap_complete::shells::Zsh, &mut cmd, name, &mut out)
+				}
+				"fish" => {
+					clap_complete::generate(clap_complete::shells::Fish, &mut cmd, name, &mut out)
+				}
+				"powershell" => clap_complete::generate(
+					clap_complete::shells::PowerShell,
+					&mut cmd,
+					name,
+					&mut out,
+				),
+				"elvish" => {
+					clap_complete::generate(clap_complete::shells::Elvish, &mut cmd, name, &mut out)
+				}
+				_ => unreachable!("clap value_parser restricts shells"),
+			}
+		}
+		Commands::Man => {
+			use clap::CommandFactory;
+			let cmd = Cli::command();
+			let mut out = std::io::stdout();
+			clap_mangen::Man::new(cmd).render(&mut out)?;
 		}
 	}
 
@@ -487,12 +622,13 @@ fn handle_feature_action(action: FeatureAction) -> Result<()> {
 			})?;
 
 			let target_system = to_system.parse::<sticks::BuildSystem>()?;
-			let proj_name = project_name.unwrap_or_else(|| {
-				std::env::current_dir()
-					.ok()
-					.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-					.unwrap_or_else(|| "project".to_string())
-			});
+			let proj_name = match project_name {
+				Some(name) => {
+					sticks::validate_project_name(&name)?;
+					name
+				}
+				None => current_project_name()?,
+			};
 
 			sticks::convert_build_system_interactive(current_system, target_system, &proj_name)?;
 		}
@@ -501,12 +637,13 @@ fn handle_feature_action(action: FeatureAction) -> Result<()> {
 			project_name,
 		} => {
 			let pm = package_manager.parse::<sticks::PackageManager>()?;
-			let proj_name = project_name.unwrap_or_else(|| {
-				std::env::current_dir()
-					.ok()
-					.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-					.unwrap_or_else(|| "project".to_string())
-			});
+			let proj_name = match project_name {
+				Some(name) => {
+					sticks::validate_project_name(&name)?;
+					name
+				}
+				None => current_project_name()?,
+			};
 
 			sticks::add_package_manager_to_project(pm, &proj_name)?;
 		}
@@ -736,8 +873,10 @@ fn handle_config_action(action: ConfigAction) -> Result<()> {
 			}
 		}
 		Apply => {
-			anyhow::bail!(
-				"Configuration is now applied automatically. Use individual config commands to modify settings."
+			// Informational only: this is not a failure, so exit 0 to match
+			// `target apply`. Callers can then treat "nothing to do" uniformly.
+			println!(
+				"Configuration is applied automatically. Use individual config commands to modify settings."
 			);
 		}
 	}
@@ -745,8 +884,12 @@ fn handle_config_action(action: ConfigAction) -> Result<()> {
 	Ok(())
 }
 
-fn handle_test_action(action: TestAction) -> Result<()> {
+fn handle_test_action(action: Option<TestAction>, release: bool) -> Result<()> {
 	use TestAction::*;
+
+	let Some(action) = action else {
+		return sticks::test_project(&std::env::current_dir()?, release);
+	};
 
 	match action {
 		Add { framework } => {
@@ -754,10 +897,7 @@ fn handle_test_action(action: TestAction) -> Result<()> {
 			let manager = TestFrameworkManager::new(fw);
 
 			let (build_file, is_cmake) = current_build_file()?;
-			let project_name = std::env::current_dir()
-				.ok()
-				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-				.unwrap_or_else(|| "project".to_string());
+			let project_name = current_project_name()?;
 			let language = sticks::languages::Language::from_project_structure_with_prompt(false)?;
 			if language != sticks::Language::Cpp {
 				anyhow::bail!("Test framework integration currently requires a C++ project");
@@ -780,8 +920,30 @@ fn handle_test_action(action: TestAction) -> Result<()> {
 			let fw_str = framework.unwrap_or_else(|| "gtest".to_string());
 			let fw = fw_str.parse::<sticks::test_framework::TestFramework>()?;
 			let manager = TestFrameworkManager::new(fw);
+
+			// The generated test is only useful if the build actually compiles
+			// it, so wire it into the build file exactly like `test add` does.
+			// Otherwise a C project silently receives an unbuildable C++ file.
+			let (build_file, is_cmake) = current_build_file()?;
+			let language = sticks::languages::Language::from_project_structure_with_prompt(false)?;
+			if language != sticks::Language::Cpp {
+				anyhow::bail!("Test framework integration currently requires a C++ project");
+			}
 			manager.setup_test_files(&project_name, "cpp")?;
-			println!("Created tests/test_{}.cpp", project_name);
+			if is_cmake {
+				manager.add_to_cmake(&build_file, &project_name)?;
+			} else {
+				manager.add_to_makefile(&build_file, &project_name)?;
+			}
+			println!(
+				"Created tests/test_{}.cpp and wired it into {}",
+				project_name,
+				if is_cmake {
+					"CMakeLists.txt"
+				} else {
+					"the Makefile"
+				}
+			);
 		}
 	}
 
@@ -795,10 +957,7 @@ fn handle_ci_action(action: CiAction) -> Result<()> {
 		Generate { platform } => {
 			let platform = platform.parse::<CiPlatform>()?;
 			let generator = CiCdGenerator::new(platform);
-			let project_name = std::env::current_dir()
-				.ok()
-				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-				.unwrap_or_else(|| "project".to_string());
+			let project_name = current_project_name()?;
 			let language = language_for_build()?;
 			let build_system = sticks::detect_build_system()?.unwrap_or(sticks::BuildSystem::CMake);
 			println!(
@@ -809,10 +968,7 @@ fn handle_ci_action(action: CiAction) -> Result<()> {
 		Write { platform } => {
 			let platform = platform.parse::<CiPlatform>()?;
 			let generator = CiCdGenerator::new(platform);
-			let project_name = std::env::current_dir()
-				.ok()
-				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-				.unwrap_or_else(|| "project".to_string());
+			let project_name = current_project_name()?;
 			let language = language_for_build()?;
 			let build_system = sticks::detect_build_system()?.unwrap_or(sticks::BuildSystem::CMake);
 			generator.write_to_file_for(&project_name, language, build_system)?;
@@ -935,10 +1091,7 @@ fn handle_docs_action(action: DocsAction) -> Result<()> {
 
 			let (build_file, is_cmake) = current_build_file()?;
 
-			let project_name = std::env::current_dir()
-				.ok()
-				.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-				.unwrap_or_else(|| "project".to_string());
+			let project_name = current_project_name()?;
 			sticks::validate_project_name(&project_name)?;
 
 			if !documentation_config_exists(tool) {
@@ -1030,6 +1183,23 @@ fn lint_config_exists(tool: StaticAnalysisTool) -> bool {
 		StaticAnalysisTool::ClangTidy => std::path::Path::new(".clang-tidy").is_file(),
 		StaticAnalysisTool::Cppcheck => std::path::Path::new("cppcheck.xml").is_file(),
 	}
+}
+
+/// Derives the project name from the current directory and validates it.
+/// The name is interpolated into generated build files, so an unvalidated
+/// directory name (e.g. `my app v2.0`) must be rejected rather than emitted.
+fn current_project_name() -> Result<String> {
+	let name = std::env::current_dir()
+		.ok()
+		.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+		.unwrap_or_else(|| "project".to_string());
+	sticks::validate_project_name(&name).map_err(|_| {
+		anyhow::anyhow!(
+				"Cannot use the current directory name {:?} as a project name. Rename it to a simple identifier.",
+				name
+			)
+		})?;
+	Ok(name)
 }
 
 fn current_build_file() -> Result<(std::path::PathBuf, bool)> {

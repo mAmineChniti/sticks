@@ -36,7 +36,7 @@ fn test_create_project_c() {
 	assert!(main_content.contains("#include <stdio.h>"));
 
 	let makefile_content = fs::read_to_string("Makefile").unwrap();
-	assert!(makefile_content.contains("CC = gcc"));
+	assert!(makefile_content.contains("CC ?="));
 
 	env::set_current_dir(&original_dir).unwrap();
 	fs::remove_dir_all(&temp_dir).ok();
@@ -74,7 +74,7 @@ fn test_create_project_cpp() {
 	assert!(main_content.contains("#include <iostream>"));
 
 	let makefile_content = fs::read_to_string("Makefile").unwrap();
-	assert!(makefile_content.contains("CXX = g++"));
+	assert!(makefile_content.contains("CXX ?="));
 
 	env::set_current_dir(&original_dir).unwrap();
 	fs::remove_dir_all(&temp_dir).ok();

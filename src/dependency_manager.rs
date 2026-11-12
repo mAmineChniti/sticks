@@ -18,6 +18,13 @@ impl DependencyManager {
 	/// Add dependencies to the project
 	/// Automatically detects build system and routes accordingly
 	pub fn add(dep_names: &[String]) -> Result<Vec<String>> {
+		Self::add_with_options(dep_names, false)
+	}
+
+	/// `system = true` forces the system-package path (Makefile
+	/// `install-deps` / CMake `find_package`) even when a Conan or vcpkg
+	/// manifest is present.
+	pub fn add_with_options(dep_names: &[String], system: bool) -> Result<Vec<String>> {
 		if dep_names.is_empty() {
 			return Ok(Vec::new());
 		}
@@ -25,8 +32,11 @@ impl DependencyManager {
 		// Try to detect what system to use
 		let build_system = detect_build_system().context("Failed to detect build system")?;
 
-		let package_manager =
-			detect_package_manager().context("Failed to detect package manager")?;
+		let package_manager = if system {
+			None
+		} else {
+			detect_package_manager().context("Failed to detect package manager")?
+		};
 
 		match package_manager {
 			Some(pm) => {
@@ -66,7 +76,14 @@ impl DependencyManager {
 			None => {
 				// Fall back to build system handler
 				match build_system {
-					Some(BuildSystem::Makefile) => Self::add_to_makefile(dep_names),
+					Some(BuildSystem::Makefile) => {
+						if !system {
+							println!(
+								"ℹ Editing system packages (install-deps). Use `sticks add --system` to make this explicit, or a package manager (-p conan|vcpkg) for manifest-based dependencies."
+							);
+						}
+						Self::add_to_makefile(dep_names)
+					}
 					Some(BuildSystem::CMake) => Self::add_to_cmake(dep_names),
 					None => bail!(
 						"No build system or package manager detected. Please initialize your project first."
@@ -78,14 +95,22 @@ impl DependencyManager {
 
 	/// Remove dependencies from the project
 	pub fn remove(dep_names: &[String]) -> Result<Vec<String>> {
+		Self::remove_with_options(dep_names, false)
+	}
+
+	/// `system = true` mirrors [`Self::add_with_options`].
+	pub fn remove_with_options(dep_names: &[String], system: bool) -> Result<Vec<String>> {
 		if dep_names.is_empty() {
 			return Ok(Vec::new());
 		}
 
 		let build_system = detect_build_system().context("Failed to detect build system")?;
 
-		let package_manager =
-			detect_package_manager().context("Failed to detect package manager")?;
+		let package_manager = if system {
+			None
+		} else {
+			detect_package_manager().context("Failed to detect package manager")?
+		};
 
 		match package_manager {
 			Some(pm) => {
@@ -140,16 +165,26 @@ impl DependencyManager {
 			bail!("Makefile not found in the current directory");
 		}
 
-		// Validate package names before modifying the Makefile
+		// Validate package names before modifying the Makefile.
+		// Skip strict validation when no supported system package manager is
+		// detected (e.g. macOS/Windows): `package_exists` would always fail
+		// there, so warn instead of blocking the user.
 		let pm = crate::os_detect::detect_system_package_manager();
-		for dep in dep_names {
-			if !crate::package_checker::package_exists(dep, pm)? {
-				let suggestions =
-					crate::package_checker::suggest_similar(dep, pm).unwrap_or_default();
-				if let Some(first) = suggestions.first() {
-					bail!("Package '{}' not found. Did you mean '{}' ?", dep, first);
-				} else {
-					bail!("Package '{}' not found in repositories.", dep);
+		if pm == crate::os_detect::SystemPackageManager::Unknown {
+			println!(
+				"⚠ No supported system package manager detected; skipping repository validation for {:?}.",
+				dep_names
+			);
+		} else {
+			for dep in dep_names {
+				if !crate::package_checker::package_exists(dep, pm)? {
+					let suggestions =
+						crate::package_checker::suggest_similar(dep, pm).unwrap_or_default();
+					if let Some(first) = suggestions.first() {
+						bail!("Package '{}' not found. Did you mean '{}' ?", dep, first);
+					} else {
+						bail!("Package '{}' not found in repositories.", dep);
+					}
 				}
 			}
 		}
@@ -293,6 +328,7 @@ impl DependencyManager {
 
 	/// Add dependencies to Conan conanfile.txt or conanfile.py
 	fn add_to_conan(dep_names: &[String]) -> Result<Vec<String>> {
+		let dep_names = conan_specs(dep_names);
 		let (conanfile_path, is_python) = if Path::new("conanfile.txt").exists() {
 			("conanfile.txt", false)
 		} else if Path::new("conanfile.py").exists() {
@@ -301,13 +337,13 @@ impl DependencyManager {
 			bail!("No conanfile.txt or conanfile.py found in current directory");
 		};
 
-		for dependency in dep_names {
+		for dependency in &dep_names {
 			validate_conan_dependency(dependency)?;
 		}
 		if is_python {
-			Self::add_to_conan_py(conanfile_path, dep_names)
+			Self::add_to_conan_py(conanfile_path, &dep_names)
 		} else {
-			Self::add_to_conan_txt(conanfile_path, dep_names)
+			Self::add_to_conan_txt(conanfile_path, &dep_names)
 		}
 	}
 
@@ -378,6 +414,7 @@ impl DependencyManager {
 		let mut class_level_deps = std::collections::HashSet::new();
 		let mut method_level_deps = std::collections::HashSet::new();
 		let mut requires_line_idx = None;
+		let mut requires_end_idx = None;
 		let mut requirements_method_idx = None;
 		let mut in_requirements = false;
 
@@ -385,53 +422,46 @@ impl DependencyManager {
 		for (i, line) in lines.iter().enumerate() {
 			let trimmed = line.trim();
 
-			// Check for class-level requires = "dep1, dep2"
-			if trimmed.starts_with("requires") && trimmed.contains('=') {
+			// Check for class-level requires = ... (word-boundary, not requiresFoo)
+			if is_requires_assignment(trimmed) && requires_line_idx.is_none() {
 				requires_line_idx = Some(i);
-				if let Some(eq_pos) = trimmed.find('=') {
-					let after_eq = &trimmed[eq_pos + 1..].trim();
-					let deps_str = after_eq
-						.trim_start_matches('"')
-						.trim_start_matches('\'')
-						.trim_start_matches('[')
-						.trim_end_matches('"')
-						.trim_end_matches('\'')
-						.trim_end_matches(']');
-
-					for dep in deps_str.split(',') {
-						let dep = dep
-							.trim()
-							.trim_start_matches('"')
-							.trim_start_matches('\'')
-							.trim_end_matches('"')
-							.trim_end_matches('\'');
-						if !dep.is_empty() {
-							class_level_deps.insert(dep.to_string());
-						}
+				let (value, end) = collect_assignment_value(&lines, i);
+				requires_end_idx = Some(end);
+				for dep in extract_python_strings(&value) {
+					if !dep.is_empty() {
+						class_level_deps.insert(dep);
+					}
+				}
+				for dep in extract_python_strings(&value) {
+					if !dep.is_empty() {
+						class_level_deps.insert(dep);
+					}
+				}
+				// Fallback: single unquoted token (rare, but don't lose it).
+				if class_level_deps.is_empty()
+					&& let Some(eq_pos) = trimmed.find('=')
+				{
+					let after_eq = trimmed[eq_pos + 1..].trim().trim_matches(',').trim();
+					if !after_eq.is_empty() && !after_eq.starts_with(['"', '\'', '[', '(', '{']) {
+						class_level_deps.insert(after_eq.to_string());
 					}
 				}
 			}
 
-			if trimmed.starts_with("def requirements(self)") {
+			if trimmed.starts_with("def requirements")
+				&& trimmed.contains('(')
+				&& trimmed.contains(')')
+			{
 				requirements_method_idx = Some(i);
 				in_requirements = true;
 			} else if in_requirements && trimmed.starts_with("def ") {
 				in_requirements = false;
 			}
 
-			if in_requirements
-				&& trimmed.contains("self.requires")
-				&& let Some(start) = trimmed.find('(')
-				&& let Some(end) = trimmed.rfind(')')
-			{
-				let args = &trimmed[start + 1..end].trim();
-				let dep = args
-					.trim_start_matches('"')
-					.trim_start_matches('\'')
-					.trim_end_matches('"')
-					.trim_end_matches('\'');
-				if !dep.is_empty() {
-					method_level_deps.insert(dep.to_string());
+			if in_requirements && trimmed.contains("self.requires") {
+				let (block, _) = collect_call_block(&lines, i);
+				if let Some(dep) = parse_self_requires(&block) {
+					method_level_deps.insert(dep);
 				}
 			}
 		}
@@ -453,7 +483,8 @@ impl DependencyManager {
 		// Add new dependencies to the appropriate location
 		if !added.is_empty() {
 			if let Some(idx) = requires_line_idx {
-				// Prefer class-level requires if it exists
+				// Prefer class-level requires if it exists (replace whole
+				// multiline span when present).
 				let line = &lines[idx];
 				let trimmed = line.trim();
 				if let Some(eq_pos) = trimmed.find('=') {
@@ -470,13 +501,19 @@ impl DependencyManager {
 					all_deps.sort();
 					all_deps.dedup();
 
-					let original_value = trimmed
-						.split_once('=')
-						.map(|(_, value)| value)
-						.unwrap_or("");
+					let (original_value, end_idx) = collect_assignment_value(&lines, idx);
+					let original_value = if original_value.is_empty() {
+						trimmed
+							.split_once('=')
+							.map(|(_, value)| value)
+							.unwrap_or("")
+					} else {
+						original_value.as_str()
+					};
 					let new_deps_str = render_python_requires(original_value, &all_deps);
 					let new_line = format!("{} {}", before_eq, new_deps_str);
-					lines[idx] = new_line;
+					let end_idx = requires_end_idx.unwrap_or(end_idx).max(idx);
+					lines.splice(idx..=end_idx.min(lines.len().saturating_sub(1)), [new_line]);
 				}
 			} else if let Some(idx) = requirements_method_idx {
 				// Add self.requires calls to requirements method
@@ -512,6 +549,7 @@ impl DependencyManager {
 
 	/// Remove dependencies from Conan conanfile.txt or conanfile.py
 	fn remove_from_conan(dep_names: &[String]) -> Result<Vec<String>> {
+		let dep_names = conan_specs(dep_names);
 		let (conanfile_path, is_python) = if Path::new("conanfile.txt").exists() {
 			("conanfile.txt", false)
 		} else if Path::new("conanfile.py").exists() {
@@ -520,13 +558,13 @@ impl DependencyManager {
 			bail!("No conanfile.txt or conanfile.py found in current directory");
 		};
 
-		for dependency in dep_names {
+		for dependency in &dep_names {
 			validate_conan_dependency(dependency)?;
 		}
 		if is_python {
-			Self::remove_from_conan_py(conanfile_path, dep_names)
+			Self::remove_from_conan_py(conanfile_path, &dep_names)
 		} else {
-			Self::remove_from_conan_txt(conanfile_path, dep_names)
+			Self::remove_from_conan_txt(conanfile_path, &dep_names)
 		}
 	}
 
@@ -582,26 +620,29 @@ impl DependencyManager {
 
 		for (index, line) in lines.iter().enumerate() {
 			let trimmed = line.trim();
-			if trimmed.starts_with("def requirements(self)") {
+			if trimmed.starts_with("def requirements") && trimmed.contains('(') {
 				in_requirements = true;
 				continue;
 			}
 			if in_requirements && trimmed.starts_with("def ") {
 				in_requirements = false;
 			}
-			if !in_requirements
-				&& trimmed.starts_with("requires")
-				&& let Some((_, value)) = trimmed.split_once('=')
-			{
-				let deps = parse_python_requirements(value);
+			if !in_requirements && is_requires_assignment(trimmed) {
+				let owned: Vec<String> = lines.iter().map(|line| line.to_string()).collect();
+				let (value, end) = collect_assignment_value(&owned, index);
+				let deps = parse_python_requirements(&value);
 				existing.extend(deps.iter().cloned());
 				if class_line.is_none() {
-					class_line = Some((index, deps));
+					class_line = Some((index, end, deps));
 				}
 			}
-			if in_requirements && let Some(dep) = parse_self_requires(trimmed) {
-				existing.insert(dep.clone());
-				method_lines.push((index, dep));
+			if in_requirements && trimmed.contains("self.requires") {
+				let owned: Vec<String> = lines.iter().map(|line| line.to_string()).collect();
+				let (block, _) = collect_call_block(&owned, index);
+				if let Some(dep) = parse_self_requires(&block) {
+					existing.insert(dep.clone());
+					method_lines.push((index, dep));
+				}
 			}
 		}
 
@@ -619,8 +660,14 @@ impl DependencyManager {
 		}
 
 		let mut output = Vec::new();
+		// Set while skipping the continuation lines of a `requires = (...)`
+		// block that has already been rewritten as a single line.
+		let mut skip_through = 0usize;
 		for (index, line) in lines.iter().enumerate() {
-			if let Some((class_index, class_deps)) = class_line.as_ref()
+			if index <= skip_through {
+				continue;
+			}
+			if let Some((class_index, class_end, class_deps)) = class_line.as_ref()
 				&& *class_index == index
 			{
 				let remaining = class_deps
@@ -633,15 +680,23 @@ impl DependencyManager {
 					.cloned()
 					.collect::<Vec<_>>();
 				if remaining.is_empty() {
+					// Drop the whole assignment block.
+					skip_through = *class_end;
 					continue;
 				}
-				let equals = line.find('=').unwrap_or(line.len() - 1);
+				// `is_requires_assignment` guarantees an `=` on this line.
+				let equals = line.find('=').ok_or_else(|| {
+					anyhow::anyhow!("Malformed requires assignment in conanfile.py")
+				})?;
 				let original_value = &line[equals + 1..];
 				output.push(format!(
 					"{} {}",
 					&line[..=equals],
 					render_python_requires(original_value, &remaining)
 				));
+				// The rewritten value is a single line; drop the old
+				// continuation lines so the file stays valid Python.
+				skip_through = *class_end;
 				continue;
 			}
 			if method_lines.iter().any(|(method_index, dependency)| {
@@ -655,7 +710,11 @@ impl DependencyManager {
 			output.push((*line).to_string());
 		}
 
-		write_atomic(Path::new(conanfile_path), &output.join("\n"))
+		let mut rendered = output.join("\n");
+		if !rendered.ends_with('\n') {
+			rendered.push('\n');
+		}
+		write_atomic(Path::new(conanfile_path), &rendered)
 			.context("Failed to write conanfile.py")?;
 		println!("Removed dependencies from conanfile.py: {:?}", removed);
 		Ok(removed)
@@ -939,32 +998,17 @@ impl DependencyManager {
 
 		println!("📦 Conan Dependencies:");
 		let mut found_any = false;
-		let mut requirements_method_idx = None;
+		let mut in_requirements = false;
+		let lines: Vec<&str> = content.lines().collect();
+		let owned: Vec<String> = lines.iter().map(|line| line.to_string()).collect();
 
-		for line in content.lines() {
+		for (index, line) in lines.iter().enumerate() {
 			let trimmed = line.trim();
 
-			// Check for class-level requires = "dep1, dep2"
-			if trimmed.starts_with("requires")
-				&& trimmed.contains('=')
-				&& let Some(eq_pos) = trimmed.find('=')
-			{
-				let after_eq = &trimmed[eq_pos + 1..].trim();
-				let deps_str = after_eq
-					.trim_start_matches('"')
-					.trim_start_matches('\'')
-					.trim_start_matches('[')
-					.trim_end_matches('"')
-					.trim_end_matches('\'')
-					.trim_end_matches(']');
-
-				for dep in deps_str.split(',') {
-					let dep = dep
-						.trim()
-						.trim_start_matches('"')
-						.trim_start_matches('\'')
-						.trim_end_matches('"')
-						.trim_end_matches('\'');
+			// Check for class-level requires = ... (multiline-aware)
+			if !in_requirements && is_requires_assignment(trimmed) {
+				let (value, _) = collect_assignment_value(&owned, index);
+				for dep in extract_python_strings(&value) {
 					if !dep.is_empty() {
 						println!("  • {}", dep);
 						found_any = true;
@@ -972,25 +1016,16 @@ impl DependencyManager {
 				}
 			}
 
-			if trimmed.starts_with("def requirements(self)") {
-				requirements_method_idx = Some(true);
-			} else if requirements_method_idx.is_some() && trimmed.starts_with("def ") {
-				requirements_method_idx = None;
+			if trimmed.starts_with("def requirements") && trimmed.contains('(') {
+				in_requirements = true;
+			} else if in_requirements && trimmed.starts_with("def ") {
+				in_requirements = false;
 			}
 
-			// Parse self.requires("dep") calls within requirements method
-			if requirements_method_idx.is_some()
-				&& trimmed.contains("self.requires")
-				&& let Some(start) = trimmed.find('(')
-				&& let Some(end) = trimmed.rfind(')')
-			{
-				let args = &trimmed[start + 1..end].trim();
-				let dep = args
-					.trim_start_matches('"')
-					.trim_start_matches('\'')
-					.trim_end_matches('"')
-					.trim_end_matches('\'');
-				if !dep.is_empty() {
+			// Parse self.requires(...) calls within requirements method
+			if in_requirements && trimmed.contains("self.requires") {
+				let (block, _) = collect_call_block(&owned, index);
+				if let Some(dep) = parse_self_requires(&block) {
 					println!("  • {}", dep);
 					found_any = true;
 				}
@@ -1042,6 +1077,26 @@ impl DependencyManager {
 	}
 }
 
+/// Normalize `name@version` shorthand into Conan ref syntax
+/// (`name/version`). Specs already containing `/` — i.e. full refs like
+/// `name/version@user/channel` — pass through unchanged.
+fn conan_specs(dep_names: &[String]) -> Vec<String> {
+	dep_names
+		.iter()
+		.map(|dep| {
+			if dep.contains('/') {
+				return dep.clone();
+			}
+			match dep.split_once('@') {
+				Some((name, version)) if !name.is_empty() && !version.is_empty() => {
+					format!("{name}/{version}")
+				}
+				_ => dep.clone(),
+			}
+		})
+		.collect()
+}
+
 fn conan_base_name(value: &str) -> &str {
 	value.split('/').next().unwrap_or(value)
 }
@@ -1053,18 +1108,232 @@ fn render_python_requires(original_value: &str, dependencies: &[String]) -> Stri
 		.map(|dependency| format!("\"{dependency}\""))
 		.collect::<Vec<_>>()
 		.join(", ");
-	if value.starts_with('[') && value.ends_with(']') {
+	if value.starts_with('[') {
 		format!("[{rendered}]")
-	} else if value.starts_with('(') && value.ends_with(')') {
-		format!("({rendered})")
-	} else if value.starts_with('{') && value.ends_with('}') {
-		format!("{{{rendered}}}")
+	} else if value.starts_with('(') {
+		// Preserve tuple syntax, including trailing comma for singletons.
+		if dependencies.len() == 1 {
+			format!("({rendered},)")
+		} else {
+			format!("({rendered})")
+		}
 	} else {
 		format!("\"{}\"", dependencies.join("\", \""))
 	}
 }
 
+/// Extracts Python string literals from `value`, handling single/double/
+/// triple quotes, escapes, trailing commas, tuples/lists, and `#` comments.
+fn is_requires_assignment(trimmed: &str) -> bool {
+	let Some(rest) = trimmed.strip_prefix("requires") else {
+		return false;
+	};
+	match rest.chars().next() {
+		Some('=') => true,
+		Some(character) if character.is_whitespace() => rest.contains('='),
+		_ => false,
+	}
+}
+
+/// Collects the right-hand side of a `requires = ...` assignment starting at
+/// `start`, joining continued lines until brackets/parens balance. Returns
+/// the joined value and the last line index of the block.
+fn collect_assignment_value(lines: &[String], start: usize) -> (String, usize) {
+	let line = &lines[start];
+	let eq_pos = match line.find('=') {
+		Some(pos) => pos,
+		None => return (String::new(), start),
+	};
+	let mut value = line[eq_pos + 1..].to_string();
+	let mut end = start;
+	let mut depth_square = 0i32;
+	let mut depth_paren = 0i32;
+	let mut in_single = false;
+	let mut in_double = false;
+	let scan = |text: &str,
+	            depth_square: &mut i32,
+	            depth_paren: &mut i32,
+	            in_single: &mut bool,
+	            in_double: &mut bool| {
+		let bytes = text.as_bytes();
+		let mut i = 0;
+		while i < bytes.len() {
+			let byte = bytes[i];
+			if *in_single {
+				if byte == b'\'' {
+					*in_single = false;
+				} else if byte == b'\\' {
+					i += 1;
+				}
+			} else if *in_double {
+				if byte == b'"' {
+					*in_double = false;
+				} else if byte == b'\\' {
+					i += 1;
+				}
+			} else {
+				match byte {
+					b'\'' => *in_single = true,
+					b'"' => *in_double = true,
+					b'#' => break,
+					b'[' => *depth_square += 1,
+					b']' => *depth_square -= 1,
+					b'(' => *depth_paren += 1,
+					b')' => *depth_paren -= 1,
+					_ => {}
+				}
+			}
+			i += 1;
+		}
+	};
+	scan(
+		&value,
+		&mut depth_square,
+		&mut depth_paren,
+		&mut in_single,
+		&mut in_double,
+	);
+	while (depth_square > 0 || depth_paren > 0 || in_single || in_double) && end + 1 < lines.len() {
+		end += 1;
+		value.push('\n');
+		value.push_str(&lines[end]);
+		scan(
+			&lines[end],
+			&mut depth_square,
+			&mut depth_paren,
+			&mut in_single,
+			&mut in_double,
+		);
+	}
+	(value, end)
+}
+
+/// Collects a `self.requires(...)` call starting at `start`, joining lines
+/// until parens balance. Returns the joined block and end line index.
+fn collect_call_block(lines: &[String], start: usize) -> (String, usize) {
+	let mut block = lines[start].clone();
+	let mut end = start;
+	let mut depth = 0i32;
+	let mut in_single = false;
+	let mut in_double = false;
+	let scan = |text: &str, depth: &mut i32, in_single: &mut bool, in_double: &mut bool| {
+		let bytes = text.as_bytes();
+		let mut i = 0;
+		while i < bytes.len() {
+			let byte = bytes[i];
+			if *in_single {
+				if byte == b'\'' {
+					*in_single = false;
+				} else if byte == b'\\' {
+					i += 1;
+				}
+			} else if *in_double {
+				if byte == b'"' {
+					*in_double = false;
+				} else if byte == b'\\' {
+					i += 1;
+				}
+			} else {
+				match byte {
+					b'\'' => *in_single = true,
+					b'"' => *in_double = true,
+					b'#' => break,
+					b'(' => *depth += 1,
+					b')' => *depth -= 1,
+					_ => {}
+				}
+			}
+			i += 1;
+		}
+	};
+	scan(&block, &mut depth, &mut in_single, &mut in_double);
+	while depth > 0 && end + 1 < lines.len() {
+		end += 1;
+		block.push('\n');
+		block.push_str(&lines[end]);
+		scan(&lines[end], &mut depth, &mut in_single, &mut in_double);
+	}
+	(block, end)
+}
+
+/// True when `chars` at `index` begins `run` repetitions of `quote`.
+fn starts_with_run(chars: &[char], index: usize, quote: char, run: usize) -> bool {
+	index + run <= chars.len() && chars[index..index + run].iter().all(|c| *c == quote)
+}
+
+fn extract_python_strings(value: &str) -> Vec<String> {
+	let mut out = Vec::new();
+	// Operate on chars so multi-byte UTF-8 can never be split at a non-boundary.
+	let chars: Vec<char> = value.chars().collect();
+	let mut index = 0;
+	while index < chars.len() {
+		// Skip comments outside strings.
+		if chars[index] == '#' {
+			while index < chars.len() && chars[index] != '\n' {
+				index += 1;
+			}
+			continue;
+		}
+		// Triple quotes first.
+		let is_triple = (chars[index] == '"' || chars[index] == '\'')
+			&& starts_with_run(&chars, index, chars[index], 3);
+		if is_triple {
+			let quote = chars[index];
+			let mut end = index + 3;
+			while end < chars.len() {
+				if chars[end] == '\\' {
+					end += 2;
+					continue;
+				}
+				if starts_with_run(&chars, end, quote, 3) {
+					break;
+				}
+				end += 1;
+			}
+			let literal: String = chars[index + 3..end.min(chars.len())].iter().collect();
+			if !literal.trim().is_empty() {
+				out.push(literal);
+			}
+			index = (end + 3).min(chars.len());
+			continue;
+		}
+		if chars[index] == '"' || chars[index] == '\'' {
+			let quote = chars[index];
+			let mut end = index + 1;
+			let mut literal = String::new();
+			while end < chars.len() {
+				if chars[end] == '\\' && end + 1 < chars.len() {
+					match chars[end + 1] {
+						'n' => literal.push('\n'),
+						't' => literal.push('\t'),
+						other => literal.push(other),
+					}
+					end += 2;
+					continue;
+				}
+				if chars[end] == quote {
+					break;
+				}
+				literal.push(chars[end]);
+				end += 1;
+			}
+			if !literal.trim().is_empty() {
+				out.push(literal);
+			}
+			index = end + 1;
+			continue;
+		}
+		index += 1;
+	}
+	out
+}
+
 fn parse_python_requirements(value: &str) -> Vec<String> {
+	let strings = extract_python_strings(value);
+	if !strings.is_empty() {
+		return strings;
+	}
+	// Fallback for unquoted edge cases: split on commas.
 	value
 		.trim()
 		.trim_start_matches('[')
@@ -1082,11 +1351,11 @@ fn parse_python_requirements(value: &str) -> Vec<String> {
 
 fn parse_self_requires(line: &str) -> Option<String> {
 	let start = line.find("self.requires(")? + "self.requires(".len();
-	let end = line[start..].find(')')? + start;
-	let value = line[start..end]
-		.trim()
-		.trim_matches(|character| character == '"' || character == '\'');
-	(!value.is_empty()).then(|| value.to_string())
+	let rest = &line[start..];
+	// Extract the first string literal (handles extra args like
+	// `self.requires("foo", override=True)` and multiline calls when the
+	// caller passes a joined block).
+	extract_python_strings(rest).into_iter().next()
 }
 
 fn build_dependency_names(
@@ -1163,7 +1432,7 @@ fn set_makefile_assignment(content: &mut String, name: &str, value: &str) {
 }
 fn makefile_link_flags(dependency: &str) -> Vec<String> {
 	let mut name = dependency.trim();
-	for separator in ['/', ':', '>'] {
+	for separator in ['/', ':', '>', '@'] {
 		if let Some((base, _)) = name.split_once(separator) {
 			name = base;
 		}
@@ -1180,14 +1449,28 @@ fn makefile_link_flags(dependency: &str) -> Vec<String> {
 	let lower_name = name.to_ascii_lowercase();
 	let flags = match lower_name.as_str() {
 		"openssl" => vec!["-lssl", "-lcrypto"],
-		"curl" => vec!["-lcurl"],
+		"curl" | "libcurl" => vec!["-lcurl"],
 		"ssl" => vec!["-lssl"],
 		"crypto" => vec!["-lcrypto"],
-		"zlib" => vec!["-lz"],
+		"zlib" | "z" => vec!["-lz"],
 		"sqlite" | "sqlite3" => vec!["-lsqlite3"],
-		"pthread" => vec!["-lpthread"],
+		"pthread" | "threads" => vec!["-lpthread"],
 		"fmt" => vec!["-lfmt"],
 		"yaml" | "yaml-cpp" => vec!["-lyaml-cpp"],
+		"m" | "libm" => vec!["-lm"],
+		"dl" => vec!["-ldl"],
+		"rt" => vec!["-lrt"],
+		"png" | "libpng" => vec!["-lpng"],
+		"jpeg" | "libjpeg" => vec!["-ljpeg"],
+		"xml2" | "libxml2" => vec!["-lxml2"],
+		"json-c" | "json" => vec!["-ljson-c"],
+		"ssh2" | "libssh2" => vec!["-lssh2"],
+		"pq" | "libpq" | "postgres" | "postgresql" => vec!["-lpq"],
+		"bz2" | "bzip2" => vec!["-lbz2"],
+		"lzma" => vec!["-llzma"],
+		"archive" | "libarchive" => vec!["-larchive"],
+		"gtest" | "googletest" => vec!["-lgtest", "-lgtest_main", "-lpthread"],
+		"pthread-stubs" => vec!["-lpthread"],
 		_ => return Vec::new(),
 	};
 	flags.into_iter().map(str::to_string).collect()
@@ -1199,7 +1482,15 @@ fn append_makefile_link_flags(content: &mut String, dependencies: &[String]) {
 		.map(str::to_string)
 		.collect::<Vec<_>>();
 	for dependency in dependencies {
-		for flag in makefile_link_flags(dependency) {
+		let mapped = makefile_link_flags(dependency);
+		if mapped.is_empty() {
+			println!(
+				"⚠ No automatic LDLIBS mapping for '{}'; install-deps was updated but no linker flag was added. Add it to LDLIBS manually if needed.",
+				dependency
+			);
+			continue;
+		}
+		for flag in mapped {
 			if !flags.contains(&flag) {
 				flags.push(flag);
 			}
@@ -1331,6 +1622,14 @@ fn parse_vcpkg_dependency(value: &str) -> Result<(String, Option<String>)> {
 		bail!("Invalid vcpkg dependency: {}", value);
 	}
 
+	// `name@version` is the sticks shorthand; it maps to vcpkg's
+	// `version>=` constraint, the least surprising interpretation.
+	if let Some((name, version)) = value.split_once('@') {
+		if name.is_empty() || version.is_empty() {
+			bail!("Invalid vcpkg dependency: {}", value);
+		}
+		return Ok((normalize_vcpkg_name(name), Some(version.to_string())));
+	}
 	if let Some((name, version)) = value.split_once(">=") {
 		if name.is_empty() || version.is_empty() {
 			bail!("Invalid vcpkg dependency: {}", value);

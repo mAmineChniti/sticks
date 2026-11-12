@@ -5,6 +5,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::SystemTime;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -16,6 +17,7 @@ use crate::constants::install_paths;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Os {
 	Linux,
+	Macos,
 	Windows,
 	Unknown,
 }
@@ -47,6 +49,12 @@ impl Architecture {
 	fn binary_name(self, os: Os) -> Result<String> {
 		match (os, self) {
 			(Os::Linux, _) => Ok(format!("sticks-linux-{}", self.release_name())),
+			(Os::Macos, Self::X86_64 | Self::Aarch64) => {
+				Ok(format!("sticks-macos-{}", self.release_name()))
+			}
+			(Os::Macos, Self::ArmV7) => {
+				anyhow::bail!("No macOS release artifact is available for armv7")
+			}
 			(Os::Windows, Self::X86_64 | Self::Aarch64) => {
 				Ok(format!("sticks-windows-{}.exe", self.release_name()))
 			}
@@ -73,8 +81,13 @@ fn get_install_path() -> Result<PathBuf> {
 	{
 		candidates.push(PathBuf::from(install_paths::USR_LOCAL_BIN));
 		candidates.push(PathBuf::from(install_paths::USR_BIN));
+		// Homebrew locations (macOS Apple Silicon + Intel, Linuxbrew)
+		candidates.push(PathBuf::from("/opt/homebrew/bin/sticks"));
+		candidates.push(PathBuf::from("/usr/local/bin/sticks"));
+		candidates.push(PathBuf::from("/home/linuxbrew/.linuxbrew/bin/sticks"));
 		if let Some(home) = dirs::home_dir() {
 			candidates.push(home.join(install_paths::CARGO_BIN_SUFFIX));
+			candidates.push(home.join(".local/bin/sticks"));
 		}
 	}
 	#[cfg(target_os = "windows")]
@@ -133,6 +146,8 @@ fn validate_install_path(path: &Path) -> Result<PathBuf> {
 fn get_os() -> Os {
 	if cfg!(target_os = "linux") {
 		Os::Linux
+	} else if cfg!(target_os = "macos") {
+		Os::Macos
 	} else if cfg!(target_os = "windows") {
 		Os::Windows
 	} else {
@@ -159,7 +174,6 @@ fn get_current_version() -> String {
 fn get_latest_version() -> Result<String> {
 	let output = Command::new("curl")
 		.args([
-			"--fail",
 			"--silent",
 			"--show-error",
 			"--location",
@@ -173,10 +187,28 @@ fn get_latest_version() -> Result<String> {
 			github::RELEASE_API_URL,
 		])
 		.output()
-		.context("Failed to fetch latest release information")?;
+		.map_err(|error| {
+			// A missing `curl` is by far the most common cause, and the raw
+			// "No such file or directory" tells the user nothing.
+			if error.kind() == std::io::ErrorKind::NotFound {
+				anyhow::anyhow!(
+					"curl is required to check for updates. Install it, or update through your package manager."
+				)
+			} else {
+				anyhow::Error::new(error).context("Failed to run curl")
+			}
+		})?;
 
 	if !output.status.success() {
-		anyhow::bail!("Failed to check for the latest version");
+		// `--fail` is deliberately omitted so the response body survives to
+		// explain *why* the request failed (rate limit, auth, 404, ...).
+		let detail = String::from_utf8_lossy(&output.stderr);
+		let detail = detail.trim();
+		anyhow::bail!(
+			"Failed to fetch the latest release information{}{}",
+			if detail.is_empty() { "" } else { ": " },
+			detail
+		);
 	}
 
 	let response: Value = serde_json::from_slice(&output.stdout)
@@ -338,17 +370,33 @@ fn compare_prerelease_identifier(
 fn is_system_install(path: &Path) -> bool {
 	#[cfg(unix)]
 	{
-		matches!(
-			path.parent(),
-			Some(parent)
-				if parent == Path::new("/usr/bin") || parent == Path::new("/usr/local/bin")
-		)
+		matches!(path.parent(), Some(parent) if {
+			parent == Path::new("/usr/bin")
+				|| parent == Path::new("/usr/local/bin")
+				|| parent == Path::new("/opt/homebrew/bin")
+				|| parent == Path::new("/home/linuxbrew/.linuxbrew/bin")
+		})
 	}
 	#[cfg(not(unix))]
 	{
 		let _ = path;
 		false
 	}
+}
+
+fn is_homebrew_install(path: &Path) -> bool {
+	path.starts_with("/opt/homebrew/Cellar/sticks")
+		|| path.starts_with("/usr/local/Cellar/sticks")
+		|| path.starts_with("/home/linuxbrew/.linuxbrew/Cellar/sticks")
+		|| Command::new("brew")
+			.args(["list", "sticks"])
+			.output()
+			.map(|o| o.status.success())
+			.unwrap_or(false)
+}
+
+fn is_cargo_install(path: &Path) -> bool {
+	path.ends_with(".cargo/bin/sticks") || path.ends_with(".cargo/bin/sticks.exe")
 }
 
 #[cfg(unix)]
@@ -379,6 +427,20 @@ pub fn update_project() -> Result<()> {
 	let install_path = get_install_path()?;
 	let latest_version = get_latest_version().context("Failed to check for updates")?;
 
+	// Never steer a user onto a prerelease. `/releases/latest` normally
+	// excludes them, but if a prerelease were ever marked latest, comparing
+	// `0.4.1` against `0.4.2-rc.1` would advertise an "update" that is a
+	// downgrade in stability terms.
+	if let Ok(latest) = parse_version(&latest_version)
+		&& latest.prerelease.is_some()
+	{
+		println!(
+			"ℹ️  The latest published release is a prerelease (v{}). Staying on v{}.",
+			latest_version, current_version
+		);
+		return Ok(());
+	}
+
 	match compare_versions(&current_version, &latest_version)
 		.context("Failed to compare sticks versions")?
 	{
@@ -404,6 +466,24 @@ pub fn update_project() -> Result<()> {
 		current_version, latest_version
 	);
 
+	if is_homebrew_install(&install_path) {
+		println!();
+		println!("ℹ️  Homebrew installation detected.");
+		println!("📦 Update with:");
+		println!();
+		println!("  brew upgrade sticks");
+		return Ok(());
+	}
+
+	if is_cargo_install(&install_path) {
+		println!();
+		println!("ℹ️  Cargo installation detected.");
+		println!("📦 Update with:");
+		println!();
+		println!("  cargo install sticks --force");
+		return Ok(());
+	}
+
 	if os == Os::Linux && is_system_install(&install_path) {
 		if is_aur_install(&install_path) {
 			println!();
@@ -425,21 +505,328 @@ pub fn update_project() -> Result<()> {
 				architecture.debian_name()
 			);
 			anyhow::bail!(
-				"Automatic installation of {} is disabled because sticks cannot verify GitHub release artifacts. Install it with your distribution package manager or verify the package before installing it manually.",
+				"Automatic installation of {} is disabled: package installation requires root and dpkg. Download it from the release page, verify it against SHA256SUMS, then install with dpkg.",
 				package
 			);
 		}
 
 		anyhow::bail!(
-			"Automatic updates are disabled for this system installation. Use your distribution package manager or install a verified release manually."
+			"Automatic updates are disabled for this system installation. Use your distribution package manager, or install a release binary manually after verifying it against SHA256SUMS."
 		);
 	}
 
 	let artifact_name = architecture.binary_name(os)?;
-	anyhow::bail!(
-		"Automatic update is disabled because sticks cannot verify GitHub release artifacts. Install v{} from a trusted package source and verify {} before replacing {:?}.",
-		latest_version,
-		artifact_name,
-		install_path
+	update_binary(&install_path, &artifact_name, &latest_version)
+}
+
+/// Tag-pinned download base, e.g.
+/// `https://github.com/mAmineChniti/sticks/releases/download/v0.4.2`.
+fn release_download_base(version: &str) -> String {
+	format!(
+		"https://github.com/{}/{}/releases/download/v{}",
+		github::REPO_OWNER,
+		github::REPO_NAME,
+		version
 	)
+}
+
+fn download_file(url: &str, dest: &Path) -> Result<()> {
+	let status = Command::new("curl")
+		.args([
+			"--silent",
+			"--show-error",
+			"--location",
+			"--proto",
+			"=https",
+			"--tlsv1.2",
+			"--max-time",
+			"300",
+			"--fail",
+			"--output",
+		])
+		.arg(dest)
+		.arg(url)
+		.status()
+		.map_err(|error| {
+			if error.kind() == std::io::ErrorKind::NotFound {
+				anyhow::anyhow!(
+					"curl is required to download updates. Install it, or update through your package manager."
+				)
+			} else {
+				anyhow::Error::new(error).context("Failed to run curl")
+			}
+		})?;
+	if !status.success() {
+		anyhow::bail!("Failed to download {} (curl exited with {})", url, status);
+	}
+	Ok(())
+}
+
+fn sha256_hex(path: &Path) -> Result<String> {
+	use sha2::{Digest, Sha256};
+	use std::io;
+	let mut file =
+		fs::File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
+	let mut hasher = Sha256::new();
+	io::copy(&mut file, &mut hasher).context("Failed to hash downloaded file")?;
+	Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Parse `sha256sum` output into `(hash, filename)` pairs. Filenames are
+/// normalized by stripping a leading `./`.
+fn parse_sha256sums(content: &str) -> Vec<(String, String)> {
+	content
+		.lines()
+		.filter_map(|line| {
+			let mut parts = line.split_whitespace();
+			let hash = parts.next()?;
+			let name = parts.next()?.trim_start_matches("./");
+			if hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+				Some((hash.to_ascii_lowercase(), name.to_string()))
+			} else {
+				None
+			}
+		})
+		.collect()
+}
+
+fn find_checksum<'a>(entries: &'a [(String, String)], artifact: &str) -> Option<&'a str> {
+	entries
+		.iter()
+		.find(|(_, name)| name == artifact)
+		.map(|(hash, _)| hash.as_str())
+}
+
+/// Verify `artifact_path` against the checksum recorded for `artifact_name`
+/// in `sums_content`. This is the security boundary of `sticks update`:
+/// the installed binary is only replaced after this returns `Ok`.
+fn verify_artifact(sums_content: &str, artifact_path: &Path, artifact_name: &str) -> Result<()> {
+	let entries = parse_sha256sums(sums_content);
+	let expected = find_checksum(&entries, artifact_name).ok_or_else(|| {
+		anyhow::anyhow!(
+			"SHA256SUMS does not list {} — refusing to install an unverified artifact",
+			artifact_name
+		)
+	})?;
+	let actual = sha256_hex(artifact_path)?;
+	if actual != expected {
+		anyhow::bail!(
+			"Checksum mismatch for {}: expected {}, got {}. The download may be corrupted or tampered with; the installed binary was NOT replaced.",
+			artifact_name,
+			expected,
+			actual
+		);
+	}
+	Ok(())
+}
+
+/// Download `artifact_name` for `version`, verify it against the published
+/// SHA256SUMS, then atomically replace `install_path`. Any failure leaves
+/// the installed binary untouched.
+fn update_binary(install_path: &Path, artifact_name: &str, version: &str) -> Result<()> {
+	let base = release_download_base(version);
+	let work = env::temp_dir().join(format!(
+		"sticks-update-{}-{}",
+		std::process::id(),
+		SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map(|d| d.as_nanos())
+			.unwrap_or_default()
+	));
+	fs::create_dir_all(&work).context("Failed to create temporary download directory")?;
+
+	let result = (|| -> Result<()> {
+		let sums_path = work.join("SHA256SUMS");
+		download_file(&format!("{base}/SHA256SUMS"), &sums_path)?;
+		let sums = fs::read_to_string(&sums_path).context("Failed to read SHA256SUMS")?;
+
+		let artifact_tmp = work.join(artifact_name);
+		download_file(&format!("{base}/{artifact_name}"), &artifact_tmp)?;
+
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			fs::set_permissions(&artifact_tmp, fs::Permissions::from_mode(0o755))
+				.context("Failed to mark downloaded binary executable")?;
+		}
+
+		verify_artifact(&sums, &artifact_tmp, artifact_name)?;
+
+		// Verified: back up the current binary, then replace it.
+		crate::file_handler::backup_existing(install_path)?;
+		#[cfg(target_os = "windows")]
+		if install_path.exists() {
+			fs::remove_file(install_path)
+				.with_context(|| format!("Failed to replace {}", install_path.display()))?;
+		}
+		fs::rename(&artifact_tmp, install_path).with_context(|| {
+			format!(
+				"Failed to install {} to {}",
+				artifact_name,
+				install_path.display()
+			)
+		})?;
+		println!("✓ Updated sticks to v{}", version);
+		println!(
+			"  Previous binary backed up to {}",
+			crate::file_handler::backup_path(install_path).display()
+		);
+		Ok(())
+	})();
+
+	let _ = fs::remove_dir_all(&work);
+	result
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn order(current: &str, latest: &str) -> Ordering {
+		compare_versions(current, latest).expect("versions must parse")
+	}
+
+	#[test]
+	fn numeric_core_compares_numerically_not_lexically() {
+		// The bug this guards: "0.10.0" < "0.9.0" under string comparison.
+		assert_eq!(order("0.9.0", "0.10.0"), Ordering::Less);
+		assert_eq!(order("0.10.0", "0.9.0"), Ordering::Greater);
+		assert_eq!(order("0.4.1", "0.4.10"), Ordering::Less);
+		assert_eq!(order("1.9.0", "1.10.0"), Ordering::Less);
+	}
+
+	#[test]
+	fn equal_versions_compare_equal() {
+		assert_eq!(order("0.4.1", "0.4.1"), Ordering::Equal);
+		assert_eq!(order("1.0.0", "1.0.0+build.5"), Ordering::Equal);
+	}
+
+	#[test]
+	fn prerelease_sorts_below_its_release() {
+		assert_eq!(order("1.0.0-rc.1", "1.0.0"), Ordering::Less);
+		assert_eq!(order("1.0.0", "1.0.0-rc.1"), Ordering::Greater);
+	}
+
+	#[test]
+	fn prerelease_identifiers_order_correctly() {
+		assert_eq!(order("1.0.0-rc.1", "1.0.0-rc.2"), Ordering::Less);
+		assert_eq!(order("1.0.0-rc.2", "1.0.0-rc.10"), Ordering::Less);
+		// A numeric identifier ranks below an alphanumeric one.
+		assert_eq!(order("1.0.0-1", "1.0.0-alpha"), Ordering::Less);
+		// More fields wins when the shared prefix is equal.
+		assert_eq!(order("1.0.0-rc", "1.0.0-rc.1"), Ordering::Less);
+	}
+
+	#[test]
+	fn rejects_malformed_versions() {
+		for bad in [
+			"",
+			"not-a-version",
+			"1.2.3.4",          // more than three core components
+			"1..2",             // empty component
+			"01.2.3",           // leading zero
+			"1.2.3-",           // empty prerelease
+			"1.2.3-01",         // leading zero in numeric identifier
+			"1.2.3-alpha_beta", // `_` is not a valid identifier character
+		] {
+			assert!(
+				parse_version(bad).is_err(),
+				"expected `{bad}` to be rejected"
+			);
+		}
+	}
+
+	#[test]
+	fn accepts_short_and_padded_version_forms() {
+		// Tags like `v1` are accepted and compare as the padded equivalent.
+		assert_eq!(order("1", "1.0.0"), Ordering::Equal);
+		assert_eq!(order("1.2", "1.2.0"), Ordering::Equal);
+		assert_eq!(order("v1.2.3", "1.2.3"), Ordering::Equal);
+	}
+
+	#[test]
+	fn accepts_well_formed_versions() {
+		for good in [
+			"0.0.4",
+			"1.2.3",
+			"0.4.1-rc.1",
+			"1.0.0-alpha.1",
+			"1.0.0-0.3.7",
+			"1.0.0+build.1",
+			"10.20.30",
+		] {
+			assert!(parse_version(good).is_ok(), "expected `{good}` to parse");
+		}
+	}
+
+	#[test]
+	fn prerelease_is_detected() {
+		assert!(parse_version("1.0.0-rc.1").unwrap().prerelease.is_some());
+		assert!(parse_version("1.0.0").unwrap().prerelease.is_none());
+	}
+
+	#[test]
+	fn validate_install_path_rejects_unrelated_files() {
+		let dir = tempfile::tempdir().unwrap();
+		let decoy = dir.path().join("not-sticks");
+		std::fs::write(&decoy, "#!/bin/sh\n").unwrap();
+		assert!(validate_install_path(&decoy).is_err());
+	}
+
+	#[test]
+	fn parse_sha256sums_normalizes_filenames() {
+		let content = "abc123  ./sticks-linux-x86_64\ndef456  sticks-macos-aarch64\n";
+		let entries = parse_sha256sums(content);
+		// Short hashes are rejected.
+		assert!(entries.is_empty());
+		let hash = "a".repeat(64);
+		let content = format!("{hash}  ./sticks-linux-x86_64\n");
+		let entries = parse_sha256sums(&content);
+		assert_eq!(entries.len(), 1);
+		assert_eq!(entries[0].1, "sticks-linux-x86_64");
+	}
+
+	#[test]
+	fn verify_artifact_accepts_matching_checksum() {
+		let dir = tempfile::tempdir().unwrap();
+		let artifact = dir.path().join("sticks-linux-x86_64");
+		std::fs::write(&artifact, "real binary bytes").unwrap();
+		let sum = sha256_hex(&artifact).unwrap();
+		let sums = format!("{sum}  ./sticks-linux-x86_64\n");
+		assert!(verify_artifact(&sums, &artifact, "sticks-linux-x86_64").is_ok());
+	}
+
+	#[test]
+	fn verify_artifact_rejects_tampered_binary() {
+		let dir = tempfile::tempdir().unwrap();
+		let artifact = dir.path().join("sticks-linux-x86_64");
+		std::fs::write(&artifact, "MALICIOUS binary").unwrap();
+		// Checksum belongs to a different (honest) payload.
+		let honest = dir.path().join("honest");
+		std::fs::write(&honest, "real binary bytes").unwrap();
+		let sum = sha256_hex(&honest).unwrap();
+		let sums = format!("{sum}  ./sticks-linux-x86_64\n");
+		let error = verify_artifact(&sums, &artifact, "sticks-linux-x86_64").unwrap_err();
+		assert!(error.to_string().contains("Checksum mismatch"));
+	}
+
+	#[test]
+	fn verify_artifact_rejects_tampered_checksum_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let artifact = dir.path().join("sticks-linux-x86_64");
+		std::fs::write(&artifact, "real binary bytes").unwrap();
+		// Attacker-controlled checksum that does not match the artifact.
+		let sums = format!("{}  ./sticks-linux-x86_64\n", "b".repeat(64));
+		assert!(verify_artifact(&sums, &artifact, "sticks-linux-x86_64").is_err());
+	}
+
+	#[test]
+	fn verify_artifact_rejects_missing_entry() {
+		let dir = tempfile::tempdir().unwrap();
+		let artifact = dir.path().join("sticks-linux-x86_64");
+		std::fs::write(&artifact, "real binary bytes").unwrap();
+		let sums = format!("{}  ./sticks-windows-x86_64.exe\n", "a".repeat(64));
+		let error = verify_artifact(&sums, &artifact, "sticks-linux-x86_64").unwrap_err();
+		assert!(error.to_string().contains("does not list"));
+	}
 }

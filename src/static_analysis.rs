@@ -81,9 +81,7 @@ FormatStyle: file
 		let mut content =
 			fs::read_to_string(cmake_path).context("Failed to read CMakeLists.txt")?;
 		let configured = match self.tool {
-			StaticAnalysisTool::ClangTidy => {
-				content.contains("CMAKE_C_CLANG_TIDY") || content.contains("C_CLANG_TIDY")
-			}
+			StaticAnalysisTool::ClangTidy => content.contains("CLANG_TIDY"),
 			StaticAnalysisTool::Cppcheck => {
 				content.contains("CPPCHECK") || content.contains("add_custom_target(cppcheck")
 			}
@@ -113,15 +111,16 @@ FormatStyle: file
 			StaticAnalysisTool::Cppcheck => "lint-cppcheck",
 		};
 		if !content.contains(&format!("{}:", target)) {
-			let rule = match self.tool {
+			let rule_body = match self.tool {
 				StaticAnalysisTool::ClangTidy => {
-					"\nlint: lint-clang-tidy\nlint-clang-tidy:\n\tfind src -type f \\( -iname '*.c' -o -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' -o -iname '*.c++' \\) -exec clang-tidy {} -- $(CPPFLAGS) $(CXXFLAGS) $(CFLAGS) +\n"
+					"lint-clang-tidy:\n\tfind src -type f \\( -iname '*.c' -o -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' -o -iname '*.c++' \\) -exec clang-tidy {} -- $(CPPFLAGS) $(CXXFLAGS) $(CFLAGS) +\n"
 				}
 				StaticAnalysisTool::Cppcheck => {
-					"\nlint: lint-cppcheck\nlint-cppcheck:\n\tcppcheck --enable=all --inconclusive --suppressions-list=cppcheck.xml src\n"
+					"lint-cppcheck:\n\tcppcheck --enable=all --inconclusive --suppressions-list=cppcheck.xml src\n"
 				}
 			};
-			content.push_str(rule);
+			merge_lint_aggregate(&mut content, target);
+			content.push_str(rule_body);
 			if let Some(position) = content.find(".PHONY:") {
 				let line_end = content[position..]
 					.find('\n')
@@ -134,6 +133,35 @@ FormatStyle: file
 		}
 		write_atomic(makefile_path, &content).context("Failed to write Makefile")
 	}
+}
+
+fn merge_lint_aggregate(content: &mut String, target: &str) {
+	for line in content.lines() {
+		let trimmed = line.trim();
+		if trimmed == "lint:" || trimmed.starts_with("lint:") || trimmed.starts_with("lint ") {
+			let mut updated = String::new();
+			let mut merged = false;
+			for current in content.lines() {
+				if !merged && current.trim() == line.trim() {
+					if current.contains(target) {
+						updated.push_str(current);
+					} else {
+						updated.push_str(&format!("{} {}", current.trim_end(), target));
+					}
+					merged = true;
+				} else {
+					updated.push_str(current);
+				}
+				updated.push('\n');
+			}
+			*content = updated;
+			return;
+		}
+	}
+	if !content.ends_with('\n') {
+		content.push('\n');
+	}
+	content.push_str(&format!("\nlint: {}\n", target));
 }
 
 fn insert_before_targets(content: &mut String, block: &str) {
