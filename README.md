@@ -38,6 +38,7 @@
 - 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings (VSCode files only when `code` is installed)
 - 🔄 **Verified Self-Update** - `sticks update` downloads the release binary only after checking it against the published `SHA256SUMS`
 - 🔨 **Build & Run** - `sticks build`, `sticks run`, `sticks test` and `sticks clean` drive the project's real build system (Make or CMake, Ninja when available)
+- 🔍 **`sticks doctor`** - Read-only environment check: compilers, make/cmake/ninja, git, curl, conan, vcpkg
 - 🛡️ **Safe Edits** - `--dry-run` previews changes as a diff; modified files are backed up to `*.sticks.bak`; `sticks eject` leaves a plain project
 - 📦 **Package Manager Integration** - Dependency manifests for Conan (`conanfile.txt`/`conanfile.py`) and vcpkg (`vcpkg.json`), with version constraints like `sticks add fmt@10.2.1`
 - 🔧 **Modular Features** - Add/remove build systems and package managers to existing projects post-creation

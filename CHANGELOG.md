@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--cc`/`--cxx` compiler overrides on `c`, `cpp` and `init`.
 - Toolchain auto-detection (gcc, clang, MSVC `cl`) for Makefile projects.
 - `sticks completions <shell>` and `sticks man`.
+- `sticks doctor` — read-only probe of compilers, make/cmake/ninja, git,
+  curl, conan and vcpkg.
 - Checksum-verified `sticks update` (SHA256SUMS published per release).
 - CI matrix: tests run on Ubuntu, macOS and Windows.
 - Dedicated CI job performing real vcpkg and Conan installs.

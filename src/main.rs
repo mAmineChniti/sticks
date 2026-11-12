@@ -235,6 +235,8 @@ enum Commands {
 	},
 	#[command(about = "Print a man page (roff) to stdout")]
 	Man,
+	#[command(about = "Check that required tools (compilers, cmake, make, ...) are available")]
+	Doctor,
 }
 
 #[derive(Subcommand)]
@@ -604,6 +606,9 @@ fn run() -> Result<()> {
 			clap_mangen::Man::new(cmd).render(&mut buf)?;
 			use std::io::Write;
 			let _ = std::io::stdout().write_all(&buf);
+		}
+		Commands::Doctor => {
+			sticks::doctor::run()?;
 		}
 	}
 
