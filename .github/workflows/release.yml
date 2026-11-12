@@ -327,6 +327,30 @@ jobs:
             | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
 
+      # Optional release signing: set the MINISIGN_SECRET_KEY (and
+      # MINISIGN_PASSWORD if the key is encrypted) repository secrets to
+      # produce SHA256SUMS.minisig alongside the checksums.
+      - name: Sign SHA256SUMS (minisign)
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          if [ -z "$MINISIGN_SECRET_KEY" ]; then
+            echo "MINISIGN_SECRET_KEY not set; skipping release signing."
+            exit 0
+          fi
+          sudo apt-get update && sudo apt-get install -y minisign
+          printf '%s' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
+          chmod 600 "$RUNNER_TEMP/minisign.key"
+          if [ -n "$MINISIGN_PASSWORD" ]; then
+            minisign -S -s "$RUNNER_TEMP/minisign.key" -P "$MINISIGN_PASSWORD" \
+              -x ./artifacts/SHA256SUMS.minisig -m ./artifacts/SHA256SUMS
+          else
+            minisign -S -s "$RUNNER_TEMP/minisign.key" -W \
+              -x ./artifacts/SHA256SUMS.minisig -m ./artifacts/SHA256SUMS
+          fi
+          rm -f "$RUNNER_TEMP/minisign.key"
+
       # The tag and the public release are created only now: every job above
       # (including the test suite) has already succeeded.
       - name: Create Git Tag
@@ -350,5 +374,6 @@ jobs:
           files: |
             ./artifacts/**/*
             ./artifacts/SHA256SUMS
+            ./artifacts/SHA256SUMS.minisig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
