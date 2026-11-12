@@ -11,7 +11,8 @@
 
 <p align="center">
   <a href="https://crates.io/crates/sticks"><img alt="Crates.io" src="https://img.shields.io/crates/v/sticks"/></a>
-  <a href="https://github.com/mAmineChniti/sticks/actions/workflows/coverage.yml"><img alt="Code Coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen"/></a>
+  <a href="https://github.com/mAmineChniti/sticks/actions"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/mAmineChniti/sticks/build.yml?branch=master"/></a>
+  <a href="https://codecov.io/gh/mAmineChniti/sticks"><img alt="codecov" src="https://codecov.io/gh/mAmineChniti/sticks/graph/badge.svg"/></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"/></a>
 </p>
 
@@ -32,23 +33,26 @@
 - 🚀 **Quick Project Setup** - Create new C/C++ projects with a single command
 - 📁 **Multiple Build Systems** - Support for both Makefile and CMake with automatic conversion
 - 🔨 **Smart Structure** - Auto-generates organized project structure with source files and build configs
-- 📦 **Dependency Management** - Easily add/remove dependencies in your Makefile
-- 🔧 **Multi-Source Support** - Add multiple source files with automatic build integration
-- 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings
-- 🔄 **Self-Updating** - Built-in update mechanism that downloads from GitHub releases
-- 📦 **Package Manager Integration** - Support for Conan and vcpkg for dependency management
+- 📦 **Dependency Management** - Easily add/remove dependencies across Makefile, CMake, Conan and vcpkg
+- 🔧 **Multi-Source Support** - Add multiple source files (build files auto-discover `src/` via glob/`find`, no manual edit needed)
+- 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings (VSCode files only when `code` is installed)
+- 🔄 **Verified Self-Update** - `sticks update` downloads the release binary only after checking it against the published `SHA256SUMS`
+- 🔨 **Build & Run** - `sticks build`, `sticks run`, `sticks test` and `sticks clean` drive the project's real build system (Make or CMake, Ninja when available)
+- 🛡️ **Safe Edits** - `--dry-run` previews changes as a diff; modified files are backed up to `*.sticks.bak`; `sticks eject` leaves a plain project
+- 📦 **Package Manager Integration** - Dependency manifests for Conan (`conanfile.txt`/`conanfile.py`) and vcpkg (`vcpkg.json`), with version constraints like `sticks add fmt@10.2.1`
 - 🔧 **Modular Features** - Add/remove build systems and package managers to existing projects post-creation
 - 🔀 **Git Integration** - Automatically initializes git repository when git is available
 - ⚡ **Command Aliases** - Short aliases for faster typing (f, add-pm, rm-pm, etc.)
-- 🎯 **Zero Runtime Dependencies** - Just needs GCC; no Rust/Cargo required after installation
-- ✅ **Quality Assured** - Comprehensive test suite with 143 automated tests (100% coverage)
-- 🔐 **CI/CD Pipeline** - Automated testing, building, and releases on every change
-- ⚙️ **Advanced Build Config** - C++ standard, compiler flags, preprocessor definitions, include/library directories
+- 📦 **Self-Contained Binary** - Ships as a static binary; no Rust/Cargo needed at runtime (GCC to build your projects, `curl` for `sticks update`)
+- ✅ **Quality Assured** - Comprehensive test suite (unit, filesystem integration and CI matrix on Ubuntu/macOS/Windows)
+- 🔐 **CI/CD Pipeline** - Automated testing on every push; releases published only after the test suite passes
+- ⚙️ **Advanced Build Config** - C++ standard, compiler flags, preprocessor definitions, include/library directories (multiline CMake supported)
 - 🧪 **Test Framework Integration** - GoogleTest, Catch2, Doctest support with automatic setup
-- 🔄 **CI/CD Generation** - GitHub Actions and GitLab CI pipeline templates
-- 🎯 **Multi-Target Support** - Executables, static libraries, shared libraries in one project
+- 🔄 **CI/CD Generation** - Multi-distro GitHub Actions and GitLab CI templates (apt/dnf/pacman/apk/zypper/brew)
+- 🎯 **Multi-Target Support** - Executables, static libraries, shared libraries in one project (platform-aware `.a/.so/.dylib/.lib/.dll`)
 - 📚 **Documentation Generation** - Doxygen and Sphinx configuration generation
 - 🔍 **Static Analysis Integration** - clang-tidy and cppcheck integration
+- 🖥️ **Cross-Platform** - Linux, macOS and Windows binaries; system packages via apt/dnf/pacman/apk/zypper/brew/choco/scoop/nix
 
 ## Installation
 
@@ -85,9 +89,23 @@ sudo dpkg -i sticks_*.deb
 ### 🚀 Pre-built Binaries
 
 ```bash
+# Linux (x86_64)
 wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-linux-x86_64
 chmod +x sticks-linux-x86_64
-sudo mv sticks-linux-x86_64 /usr/local/bin/sticks
+
+# Verify against the published checksums before installing
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+
+sudo install -m 755 sticks-linux-x86_64 /usr/local/bin/sticks
+
+# macOS (Apple Silicon example)
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks-macos-aarch64
+chmod +x sticks-macos-aarch64
+sha256sum -c SHA256SUMS --ignore-missing   # after downloading SHA256SUMS above
+sudo install -m 755 sticks-macos-aarch64 /usr/local/bin/sticks
+# Windows: download sticks-windows-x86_64.exe from the releases page and
+# verify its hash against SHA256SUMS (e.g. `certutil -hashfile sticks-windows-x86_64.exe SHA256`)
 ```
 
 ### 🦀 From Cargo
@@ -150,9 +168,11 @@ sticks add libcurl
 # Add more source files
 sticks src utils network
 
-# Build and run
-make
-./my-project
+# Build, run and test through sticks (works for Makefile and CMake)
+sticks build
+sticks run
+sticks test
+sticks clean
 ```
 
 ## Usage
@@ -237,18 +257,62 @@ sticks init cpp --build cmake  # Initialize C++ project with CMake
 ```bash
 sticks add libcurl              # Single dependency
 sticks add openssl libpq zlib   # Multiple dependencies
+sticks add fmt@10.2.1           # With a version constraint
+sticks add --system libcurl     # OS package via install-deps / find_package
 ```
 
-Automatically updates your Makefile's `install-deps` target.
+Dependencies are written to the project's real package manager when one is
+configured:
+
+- `conanfile.txt` / `conanfile.py` `[requires]` for Conan (`name@1.2.3` becomes `name/1.2.3`)
+- `vcpkg.json` `dependencies` for vcpkg (`name@1.2.3` becomes `"version>=1.2.3"`)
+
+Otherwise:
+- Makefile: `install-deps` target (system packages) + `LDLIBS` where a mapping is known — use `--system` to make this explicit
+- CMake: `find_package()` + `target_link_libraries()`
 
 **Remove dependencies:**
 
 ```bash
 sticks remove libcurl           # Remove single dependency
-sticks remove openssl libpq     # Remove multiple dependencies
+sticks remove fmt@10.2.1        # Versioned spec also works
+sticks remove --system libcurl  # Remove a system package
 ```
 
-Cleans up the `install-deps` rule automatically when empty.
+### Building, running and testing
+
+`sticks` drives whatever build system the project uses — no need to
+remember `make` vs `cmake --build`:
+
+```bash
+sticks build              # Debug build (Ninja generator for CMake when available)
+sticks build --release    # Release build
+sticks run                # Build, then run the program
+sticks run -- --verbose   # Pass arguments to the program
+sticks run --no-build     # Run the existing binary
+sticks test               # ctest (CMake) or `make test` (Makefile)
+sticks clean              # Remove build artifacts
+```
+
+CMake projects also get a standard `CMakePresets.json` (`debug`/`release`
+configure, build and test presets), so `cmake --preset debug && cmake
+--build --preset debug` and IDE integrations work without sticks.
+
+### Safe edits
+
+Every command that modifies files supports `--dry-run` (prints a unified
+diff, writes nothing) and `--force` (overwrites after keeping a backup):
+
+```bash
+sticks add --dry-run curl    # Preview the diff
+sticks feature convert --dry-run cmake
+```
+
+Modified files are automatically backed up to `<file>.sticks.bak` before
+being overwritten, and repeated commands are idempotent. `sticks eject`
+moves sticks-specific files (`.vscode/`, `CMakePresets.json`,
+`.clang-format`, …) to `.sticks.bak` backups, leaving a plain project that
+builds without sticks.
 
 ### Adding Source Files
 
@@ -260,14 +324,16 @@ sticks src network database    # Add multiple source files
 Sticks will:
 
 - Create source files in `src/`
-- Create corresponding headers
-- Update build file (Makefile or CMakeLists.txt) automatically
+- Create corresponding headers in `include/`
+- No build-file edit needed: generated Makefile (`find src`) and CMake (`GLOB_RECURSE src/*`) pick them up automatically
 
 ### Package Manager Integration
 
 Sticks supports C/C++ package managers for dependency management:
 
 #### Conan
+
+> Note: Conan integration requires CMake (`--build cmake`). Makefile + Conan is rejected.
 
 Create a project with Conan dependency management:
 
@@ -348,9 +414,11 @@ sticks f convert cmake my_project
 
 This will:
 
-- Remove old build system file
-- Generate new configuration with your source files
+- Generate the new build configuration with your source files
+- Preserve the old build file as `<old-file>.sticks.bak` (numbered if one already exists)
 - Maintain project structure
+- Re-apply package-manager integration when present
+- Note: converting to Makefile while Conan is configured is rejected (Conan requires CMake)
 
 ### Add Package Manager
 
@@ -440,7 +508,7 @@ sticks test add catch2
 # Add Doctest
 sticks test add doctest
 
-# Generate a test file template (optional framework parameter)
+# Generate a test file and wire it into the build (optional framework parameter)
 sticks test generate my_project
 sticks test generate my_project --framework catch2
 ```
@@ -487,11 +555,14 @@ sticks target add mylib --type static -s src/lib.cpp
 # Add shared library target (applied immediately)
 sticks target add mylib --type shared -s src/lib.cpp -d pthread
 
-# List all targets (now implemented!)
+# List all targets
 sticks target list
+
+# Remove a target
+sticks target remove mylib
 ```
 
-Note: Targets are added immediately to your build file (CMakeLists.txt or Makefile). Target removal requires modifying build files and is not yet implemented.
+Note: Targets are added/removed immediately in your build file (CMakeLists.txt or Makefile).
 
 ### Documentation Generation
 
@@ -561,22 +632,27 @@ sticks --version        # Show version
 
 ## Updating
 
-Sticks can update itself without requiring Rust/Cargo:
+Sticks checks for updates without requiring Rust/Cargo:
 
 ```bash
 sticks update
 ```
 
-This downloads the latest binary from GitHub releases and replaces your installation.
+For binaries installed outside a package manager, `sticks update` downloads
+the release artifact for your OS/architecture, verifies it against the
+`SHA256SUMS` file published with every release, and only then replaces the
+installed binary (the previous one is kept as `sticks.sticks.bak`). If the
+checksum does not match, the update aborts and nothing is replaced.
 
-**Alternative update methods:**
+Installs managed by a package manager are updated through that manager
+instead:
 
 ```bash
-# Arch Linux (using AUR package manager)
-# Package name: sticks-aur
-yay -Syu sticks-aur
-# or
-paru -Syu sticks-aur
+# Arch Linux (AUR package name: sticks-aur)
+yay -Syu sticks-aur    # or: paru -Syu sticks-aur
+
+# Homebrew
+brew upgrade sticks
 
 # Cargo installation
 cargo install sticks --force
@@ -617,19 +693,59 @@ my-project/
 │   └── network.h
 ├── bin/                # Final compiled binaries (gitignored)
 ├── build/              # Object files and build artifacts (gitignored)
-└── Makefile            # Auto-generated, customizable
+├── Makefile            # Or CMakeLists.txt, depending on --build
+└── README.md           # Auto-generated
 ```
 
 ## Technical Details
 
-- **Language:** Rust 2021 edition
-- **Dependencies:** clap 4, anyhow (build-time only)
-- **Dev Dependencies:** serial_test (for isolated test execution)
-- **Runtime Requirements:** GCC (for compiling your C/C++ projects)
-- **Supported Architectures:** x86_64
-- **Supported Platforms:** Linux (Arch, Debian, Ubuntu, others)
-- **Test Coverage:** 143 comprehensive tests covering all core functionality (44.58% coverage)
+- **Language:** Rust 2024 edition
+- **Dependencies:** anyhow, clap 4 (+ clap_complete, clap_mangen), dirs, libc, regex, serde_json, sha2, similar, strsim
+- **Dev Dependencies:** serial_test, tempfile (for isolated test execution)
+- **Runtime Requirements:** a C/C++ toolchain for building your projects (gcc, clang, or MSVC — detected automatically, overridable with `--cc`/`--cxx`); `curl` required for `sticks update`
+- **Supported Architectures:** x86_64, aarch64, armv7 (Linux); x86_64, aarch64 (macOS and Windows)
+- **Supported Platforms:** Linux, macOS and Windows binaries are built; system packages via apt/dnf/pacman/apk/zypper/brew/choco/scoop/nix
+- **Test Coverage:** measured by `cargo tarpaulin` in CI (see the codecov badge for the current number); the suite includes regression tests for build-file corruption and update-verification scenarios
+- **Library Use:** `detect_build_file_in`, `detect_build_system_in`, `detect_package_manager_in`, `Language::from_project_structure_in`, `project_path_in`, `generate_vscode_tasks_config_in/for` avoid global CWD state
+- **CMake Parsing:** multiline `find_package`/`target_link_libraries`/`add_executable`/`add_library` with quote- and comment-awareness
+- **Conan:** multiline `requires` blocks, tuples, and `self.requires(..., ...)` with extra args are parsed
+- **Makefile:** `.RECIPEPREFIX` respected; atomic writes fsync file + parent dir
 - **CI/CD:** Automated testing, building, and releases via GitHub Actions
+
+## Shell completions and man page
+
+```bash
+sticks completions bash > ~/.local/share/bash-completion/completions/sticks
+sticks completions zsh > ~/.zfunc/_sticks
+sticks man | man -l -
+```
+
+## How sticks compares
+
+sticks is deliberately a **thin layer**: it scaffolds projects and edits
+standard `Makefile`/`CMakeLists.txt`/`conanfile.*`/`vcpkg.json` files. The
+generated project builds with plain `make` or `cmake` — sticks is never
+required again (`sticks eject` removes its metadata entirely).
+
+- **CMake presets / `cmake --preset`**: presets are a CMake feature, not a
+  project manager. sticks *generates* a `CMakePresets.json` for you and can
+  drive it (`sticks build/run/test`), but does not replace CMake.
+- **xmake**: a full alternative build system with its own DSL and package
+  repository. Choose xmake if you want one tool to own the whole build;
+  choose sticks if you want standard Make/CMake output you can take
+  anywhere.
+- **Meson**: another full build system (simpler than CMake, smaller
+  ecosystem). sticks does not compete with it — it emits CMake/Make.
+- **CForge**: a C/C++ project scaffolding CLI focused on generating
+  project structure and build files. sticks overlaps here, and additionally
+  manages dependencies across Conan/vcpkg and drives build/run/test.
+- **Craft**: JetBrains' C++ package/build manager with its own package
+  format and huge prebuilt binary repository. Craft is much heavier and
+  prescribes its own workflow; sticks stays lightweight and
+  package-manager-agnostic.
+
+If your priority is "standard files I can leave behind", sticks fits. If you
+want a batteries-included ecosystem, xmake/Craft/Meson are stronger fits.
 
 ## Contributing
 
