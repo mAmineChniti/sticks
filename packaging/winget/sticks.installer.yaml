@@ -1,0 +1,19 @@
+# winget manifest template for sticks.
+#
+# winget packages live in the microsoft/winget-pkgs repository. To publish,
+# copy this file to `manifests/s/sticks/sticks/<version>/` in that repo,
+# fill in the InstallerSha256 from the release's SHA256SUMS, and open a PR.
+# See: https://github.com/microsoft/winget-pkgs
+
+PackageIdentifier: mAmineChniti.sticks
+PackageVersion: 0.4.1
+InstallerType: portable
+InstallModes:
+  - portable
+  - interactive
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/mAmineChniti/sticks/releases/download/v0.4.1/sticks-windows-x86_64.exe
+    InstallerSha256: REPLACE_WITH_SHA256_FROM_RELEASES_SHA256SUMS
+ManifestType: singleton
+ManifestVersion: 1.9.0
