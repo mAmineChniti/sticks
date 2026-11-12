@@ -27,7 +27,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked --version 0.22.2
@@ -46,7 +46,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked --version 0.20.2

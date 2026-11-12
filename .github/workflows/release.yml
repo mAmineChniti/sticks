@@ -66,7 +66,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
 
       - name: Run tests
         run: cargo test --verbose
@@ -86,7 +86,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
 
       - name: Publish to crates.io
         # A failure here must fail the job: silently swallowing it makes the
@@ -110,7 +110,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
 
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked --version 3.8.0
@@ -149,7 +149,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
           target: ${{ matrix.target }}
           cache: false
 
@@ -217,7 +217,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
           target: ${{ matrix.target }}
           cache: false
 
@@ -258,7 +258,7 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
           target: ${{ matrix.target }}
           cache: false
 
