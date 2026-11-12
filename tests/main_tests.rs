@@ -114,3 +114,34 @@ fn test_cli_shortcut_aliases() {
 	);
 	assert!(temp_dir.path().join("src/main.c").exists());
 }
+
+#[test]
+fn test_cli_completions_and_man() {
+	for shell in ["bash", "zsh", "fish", "powershell", "elvish"] {
+		let output = Command::new(sticks_binary())
+			.args(["completions", shell])
+			.output()
+			.expect("Failed to execute completions");
+		assert!(
+			output.status.success(),
+			"completions {shell} failed: {}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+		assert!(!output.stdout.is_empty());
+	}
+
+	let bash = Command::new(sticks_binary())
+		.args(["completions", "bash"])
+		.output()
+		.unwrap();
+	let stdout = String::from_utf8_lossy(&bash.stdout);
+	assert!(stdout.contains("_sticks()"));
+
+	let man = Command::new(sticks_binary())
+		.arg("man")
+		.output()
+		.expect("Failed to execute man");
+	assert!(man.status.success());
+	let man_out = String::from_utf8_lossy(&man.stdout);
+	assert!(man_out.contains(".TH sticks 1"));
+}
