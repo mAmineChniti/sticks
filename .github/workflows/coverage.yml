@@ -7,6 +7,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   coverage:
     name: Code Coverage Report
@@ -14,32 +18,34 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: 1.99.1
           components: llvm-tools-preview
 
       - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked --version 0.37.5
 
       - name: Generate coverage report
-        run: cargo tarpaulin --verbose --all-features --timeout 300 --out Xml --output-dir coverage --engine llvm
+        run: cargo tarpaulin --verbose --all-features --timeout 300 --out Xml --out Stdout --output-dir coverage --engine llvm
 
       - name: Display coverage summary
         run: |
           echo "📊 Code Coverage Report"
           echo "======================="
           if [ -f "./coverage/cobertura.xml" ]; then
-            cargo tarpaulin --verbose --all-features --timeout 300 --out Stdout --engine llvm
+            echo "Coverage report generated at ./coverage/cobertura.xml"
+            ls -lh ./coverage/
           else
             echo "Coverage report not found"
+            exit 1
           fi
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage/cobertura.xml
           fail_ci_if_error: false

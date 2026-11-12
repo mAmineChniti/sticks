@@ -11,29 +11,43 @@ jobs:
   get-versions:
     name: Extract Release Versions
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       prev_version: ${{ steps.versions.outputs.PREV_VERSION }}
       new_version: ${{ steps.versions.outputs.NEW_VERSION }}
+      skip: ${{ steps.versions.outputs.SKIP }}
     steps:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Get versions
         id: versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LATEST=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest \
+          AUTH_HEADER=""
+          if [ -n "$GITHUB_TOKEN" ]; then
+            AUTH_HEADER="Authorization: Bearer $GITHUB_TOKEN"
+          fi
+
+          LATEST=$(curl -s -H "$AUTH_HEADER" https://api.github.com/repos/${{ github.repository }}/releases/latest \
             | jq -r '.tag_name' | sed 's/^v//')
-          
-          PREVIOUS=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases?per_page=2" \
+
+          PREVIOUS=$(curl -s -H "$AUTH_HEADER" "https://api.github.com/repos/${{ github.repository }}/releases?per_page=2" \
             | jq -r '.[1].tag_name' | sed 's/^v//')
-          
+
           if [ -z "$PREVIOUS" ] || [ -z "$LATEST" ] || [ "$PREVIOUS" = "null" ] || [ "$LATEST" = "null" ]; then
-            echo "❌ Failed to extract versions (need at least 2 releases)"
+            echo "⚠️ Fewer than 2 releases found, skipping update tests"
             echo "LATEST: $LATEST"
             echo "PREVIOUS: $PREVIOUS"
-            exit 1
+            echo "SKIP=true" >> $GITHUB_OUTPUT
+            echo "PREV_VERSION=" >> $GITHUB_OUTPUT
+            echo "NEW_VERSION=" >> $GITHUB_OUTPUT
+            exit 0
           fi
-          
+
+          echo "SKIP=false" >> $GITHUB_OUTPUT
           echo "PREV_VERSION=$PREVIOUS" >> $GITHUB_OUTPUT
           echo "NEW_VERSION=$LATEST" >> $GITHUB_OUTPUT
           echo "✓ Detected versions - Previous: v$PREVIOUS, Latest: v$LATEST"
@@ -41,9 +55,11 @@ jobs:
   test-deb-update:
     name: Test .deb Package Update
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: get-versions
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
-    
+    if: ${{ needs.get-versions.outputs.skip != 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+
     steps:
       - name: Display test versions
         run: |
@@ -54,19 +70,19 @@ jobs:
           echo "📥 Downloading previous version v${{ needs.get-versions.outputs.prev_version }}"
           curl -L -o sticks-old.deb \
             "https://github.com/${{ github.repository }}/releases/download/v${{ needs.get-versions.outputs.prev_version }}/sticks_${{ needs.get-versions.outputs.prev_version }}-1_amd64.deb"
-          
+
           if [ ! -f sticks-old.deb ]; then
             echo "❌ Failed to download previous version"
             exit 1
           fi
-          
+
           ls -lh sticks-old.deb
 
       - name: Install previous version
         run: |
           echo "📦 Installing previous version v${{ needs.get-versions.outputs.prev_version }}"
           sudo dpkg -i sticks-old.deb || sudo apt-get install -f -y
-          
+
           echo "✓ Verifying installation"
           which sticks
           sticks --version
@@ -75,7 +91,7 @@ jobs:
         run: |
           VERSION_OUTPUT=$(sticks --version)
           echo "Installed version: $VERSION_OUTPUT"
-          
+
           if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.prev_version }}"; then
             echo "✓ Previous version installed correctly"
           else
@@ -86,45 +102,55 @@ jobs:
       - name: Test update command
         run: |
           echo "🔄 Testing update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
-          
-          echo "y" | sticks update > /tmp/update.log 2>&1 || UPDATE_FAILED=1
-          
+          echo "NOTE: automatic in-place replacement is disabled; sticks must refuse and print reinstall guidance."
+
+          set +e
+          sticks update > /tmp/update.log 2>&1
+          UPDATE_EXIT=$?
+          set -e
+
           cat /tmp/update.log
-          
-          if [ "$UPDATE_FAILED" = "1" ]; then
-            echo "❌ Update command failed (exit code non-zero)"
+
+          if [ "$UPDATE_EXIT" = "0" ]; then
+            echo "❌ Expected 'sticks update' to refuse automatic .deb replacement (non-zero exit)"
             exit 1
           fi
-          
+
+          if grep -qiE "cannot verify|\.deb|distribution package manager|verify the package" /tmp/update.log; then
+            echo "✓ Update correctly refused with reinstall guidance"
+          else
+            echo "❌ Update output did not contain expected reinstall guidance"
+            exit 1
+          fi
+
           sleep 2
-          
-          echo "✓ Verifying updated version"
+
+          echo "✓ Verifying installed version is unchanged (no destructive replace)"
           sticks --version
 
-      - name: Verify updated version
+      - name: Verify version unchanged
         run: |
           VERSION_OUTPUT=$(sticks --version)
-          echo "Updated version: $VERSION_OUTPUT"
-          
-          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.new_version }}"; then
-            echo "✅ Update successful! Now running v${{ needs.get-versions.outputs.new_version }}"
+          echo "Version after update attempt: $VERSION_OUTPUT"
+
+          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.prev_version }}"; then
+            echo "✅ Correctly still on v${{ needs.get-versions.outputs.prev_version }} (no unverified replace)"
           else
-            echo "❌ Update failed or version mismatch!"
-            echo "Expected: ${{ needs.get-versions.outputs.new_version }}"
-            echo "Got: $VERSION_OUTPUT"
+            echo "❌ Version changed unexpectedly!"
             exit 1
           fi
 
       - name: Test basic functionality after update
         run: |
           echo "🧪 Testing basic functionality"
-          
-          mkdir -p /tmp/test-project
-          cd /tmp/test-project
-          
+
+          rm -rf /tmp/test-project-deb
+          mkdir -p /tmp/test-project-deb
+          cd /tmp/test-project-deb
+
           echo "Creating test project..."
           sticks c test_app
-          
+
           if [ -d "test_app" ]; then
             echo "✅ Project creation works after update"
           else
@@ -135,18 +161,20 @@ jobs:
   test-cargo-update:
     name: Test Cargo Install Update
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: get-versions
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
-    
+    if: ${{ needs.get-versions.outputs.skip != 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+
     steps:
       - name: Display test versions
         run: |
           echo "Testing cargo install update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
 
       - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: stable
+          toolchain: 1.99.1
 
       - name: Install previous version via cargo
         run: |
@@ -157,7 +185,7 @@ jobs:
         run: |
           VERSION_OUTPUT=$(sticks --version)
           echo "Installed version: $VERSION_OUTPUT"
-          
+
           if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.prev_version }}"; then
             echo "✓ Previous version installed correctly via cargo"
           else
@@ -168,45 +196,55 @@ jobs:
       - name: Test update command
         run: |
           echo "🔄 Testing cargo-based update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
-          
-          sticks update > /tmp/update.log 2>&1 || UPDATE_FAILED=1
-          
+          echo "NOTE: cargo installs print 'cargo install --force' guidance and exit 0 without changing the binary."
+
+          set +e
+          sticks update > /tmp/update.log 2>&1
+          UPDATE_EXIT=$?
+          set -e
+
           cat /tmp/update.log
-          
-          if [ "$UPDATE_FAILED" = "1" ]; then
-            echo "❌ Update command failed (exit code non-zero)"
+
+          if [ "$UPDATE_EXIT" != "0" ]; then
+            echo "❌ Expected 'sticks update' to succeed with cargo guidance (exit 0)"
             exit 1
           fi
-          
+
+          if grep -q "cargo install sticks --force" /tmp/update.log; then
+            echo "✓ Update printed cargo reinstall guidance"
+          else
+            echo "❌ Update output did not contain 'cargo install sticks --force'"
+            exit 1
+          fi
+
           sleep 2
-          
-          echo "✓ Verifying updated version"
+
+          echo "✓ Verifying version is unchanged (guidance only, no auto-replace)"
           sticks --version
 
-      - name: Verify updated version
+      - name: Verify version unchanged
         run: |
           VERSION_OUTPUT=$(sticks --version)
-          echo "Updated version: $VERSION_OUTPUT"
-          
-          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.new_version }}"; then
-            echo "✅ Update successful! Now running v${{ needs.get-versions.outputs.new_version }}"
+          echo "Version after update attempt: $VERSION_OUTPUT"
+
+          if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.prev_version }}"; then
+            echo "✅ Correctly still on v${{ needs.get-versions.outputs.prev_version }}"
           else
-            echo "❌ Update failed or version mismatch!"
-            echo "Expected: ${{ needs.get-versions.outputs.new_version }}"
-            echo "Got: $VERSION_OUTPUT"
+            echo "❌ Version changed unexpectedly!"
             exit 1
           fi
 
       - name: Test basic functionality after update
         run: |
           echo "🧪 Testing basic functionality"
-          
-          mkdir -p /tmp/test-project
-          cd /tmp/test-project
-          
+
+          rm -rf /tmp/test-project-cargo
+          mkdir -p /tmp/test-project-cargo
+          cd /tmp/test-project-cargo
+
           echo "Creating test project..."
           sticks c test_app
-          
+
           if [ -d "test_app" ]; then
             echo "✅ Project creation works after update"
           else
@@ -217,9 +255,11 @@ jobs:
   test-binary-update:
     name: Test Binary Update
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: get-versions
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
-    
+    if: ${{ needs.get-versions.outputs.skip != 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+
     steps:
       - name: Display test versions
         run: |
@@ -230,14 +270,14 @@ jobs:
           echo "📥 Downloading previous version v${{ needs.get-versions.outputs.prev_version }}"
           curl -L -o sticks-old \
             "https://github.com/${{ github.repository }}/releases/download/v${{ needs.get-versions.outputs.prev_version }}/sticks-linux-x86_64"
-          
+
           chmod +x sticks-old
-          
+
           if [ ! -f sticks-old ]; then
             echo "❌ Failed to download previous version"
             exit 1
           fi
-          
+
           ls -lh sticks-old
 
       - name: Install previous version
@@ -252,7 +292,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           VERSION_OUTPUT=$(sticks --version)
           echo "Installed version: $VERSION_OUTPUT"
-          
+
           if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.prev_version }}"; then
             echo "✓ Previous version installed correctly"
           else
@@ -263,34 +303,37 @@ jobs:
       - name: Test update command
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          echo "🔄 Testing binary update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
-          
-          sticks update > /tmp/update.log 2>&1 || UPDATE_FAILED=1
-          
+          echo "🔄 Testing verified binary update from v${{ needs.get-versions.outputs.prev_version }} to v${{ needs.get-versions.outputs.new_version }}"
+
+          sticks update > /tmp/update.log 2>&1
+          UPDATE_EXIT=$?
+
           cat /tmp/update.log
-          
-          if [ "$UPDATE_FAILED" = "1" ]; then
-            echo "❌ Update command failed (exit code non-zero)"
+
+          if [ "$UPDATE_EXIT" != "0" ]; then
+            echo "❌ Expected 'sticks update' to succeed with checksum-verified replacement"
             exit 1
           fi
-          
-          sleep 2
-          
-          echo "✓ Verifying updated version"
-          sticks --version
 
-      - name: Verify updated version
+          if grep -q "Updated sticks to v${{ needs.get-versions.outputs.new_version }}" /tmp/update.log; then
+            echo "✓ Update completed with verified artifact"
+          else
+            echo "❌ Update output did not confirm the new version"
+            exit 1
+          fi
+
+          sleep 2
+
+      - name: Verify version updated
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           VERSION_OUTPUT=$(sticks --version)
-          echo "Updated version: $VERSION_OUTPUT"
-          
+          echo "Version after update: $VERSION_OUTPUT"
+
           if echo "$VERSION_OUTPUT" | grep -q "${{ needs.get-versions.outputs.new_version }}"; then
-            echo "✅ Update successful! Now running v${{ needs.get-versions.outputs.new_version }}"
+            echo "✅ Updated to v${{ needs.get-versions.outputs.new_version }}"
           else
-            echo "❌ Update failed or version mismatch!"
-            echo "Expected: ${{ needs.get-versions.outputs.new_version }}"
-            echo "Got: $VERSION_OUTPUT"
+            echo "❌ Version did not change to the latest release!"
             exit 1
           fi
 
@@ -298,13 +341,14 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           echo "🧪 Testing basic functionality"
-          
-          mkdir -p /tmp/test-project
-          cd /tmp/test-project
-          
+
+          rm -rf /tmp/test-project-binary
+          mkdir -p /tmp/test-project-binary
+          cd /tmp/test-project-binary
+
           echo "Creating test project..."
           sticks c test_app
-          
+
           if [ -d "test_app" ]; then
             echo "✅ Project creation works after update"
           else
@@ -315,35 +359,48 @@ jobs:
   update-test-summary:
     name: Update Test Summary
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [get-versions, test-deb-update, test-cargo-update, test-binary-update]
     if: always()
-    
+
     steps:
       - name: Check test results
         run: |
           echo "## Update Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
+          if [ "${{ needs.get-versions.outputs.skip }}" = "true" ]; then
+            echo "⏭️ Fewer than 2 releases found, update tests skipped." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
           if [ "${{ needs.test-deb-update.result }}" = "success" ]; then
             echo "✅ .deb package update: PASSED" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test-deb-update.result }}" = "skipped" ]; then
+            echo "⏭️ .deb package update: SKIPPED" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ .deb package update: FAILED" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ "${{ needs.test-cargo-update.result }}" = "success" ]; then
             echo "✅ Cargo install update: PASSED" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test-cargo-update.result }}" = "skipped" ]; then
+            echo "⏭️ Cargo install update: SKIPPED" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Cargo install update: FAILED" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ "${{ needs.test-binary-update.result }}" = "success" ]; then
             echo "✅ Binary update: PASSED" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test-binary-update.result }}" = "skipped" ]; then
+            echo "⏭️ Binary update: SKIPPED" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Binary update: FAILED" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ "${{ needs.test-deb-update.result }}" = "success" ] && \
              [ "${{ needs.test-cargo-update.result }}" = "success" ] && \
              [ "${{ needs.test-binary-update.result }}" = "success" ]; then
