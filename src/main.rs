@@ -569,34 +569,41 @@ fn run() -> Result<()> {
 			use clap::CommandFactory;
 			let mut cmd = Cli::command();
 			let name = cmd.get_name().to_string();
-			let mut out = std::io::stdout();
+			// Generate into a buffer first: clap_complete panics on write
+			// errors, so piping to a closed consumer (`| head`) would abort
+			// with a panic. Writing once ourselves lets us ignore EPIPE.
+			let mut buf = Vec::new();
 			match shell.as_str() {
 				"bash" => {
-					clap_complete::generate(clap_complete::shells::Bash, &mut cmd, name, &mut out)
+					clap_complete::generate(clap_complete::shells::Bash, &mut cmd, name, &mut buf)
 				}
 				"zsh" => {
-					clap_complete::generate(clap_complete::shells::Zsh, &mut cmd, name, &mut out)
+					clap_complete::generate(clap_complete::shells::Zsh, &mut cmd, name, &mut buf)
 				}
 				"fish" => {
-					clap_complete::generate(clap_complete::shells::Fish, &mut cmd, name, &mut out)
+					clap_complete::generate(clap_complete::shells::Fish, &mut cmd, name, &mut buf)
 				}
 				"powershell" => clap_complete::generate(
 					clap_complete::shells::PowerShell,
 					&mut cmd,
 					name,
-					&mut out,
+					&mut buf,
 				),
 				"elvish" => {
-					clap_complete::generate(clap_complete::shells::Elvish, &mut cmd, name, &mut out)
+					clap_complete::generate(clap_complete::shells::Elvish, &mut cmd, name, &mut buf)
 				}
 				_ => unreachable!("clap value_parser restricts shells"),
 			}
+			use std::io::Write;
+			let _ = std::io::stdout().write_all(&buf);
 		}
 		Commands::Man => {
 			use clap::CommandFactory;
 			let cmd = Cli::command();
-			let mut out = std::io::stdout();
-			clap_mangen::Man::new(cmd).render(&mut out)?;
+			let mut buf = Vec::new();
+			clap_mangen::Man::new(cmd).render(&mut buf)?;
+			use std::io::Write;
+			let _ = std::io::stdout().write_all(&buf);
 		}
 	}
 
