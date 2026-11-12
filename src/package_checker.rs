@@ -383,9 +383,14 @@ mod tests {
 		let sug = suggest_similar("libcrl", pm).unwrap();
 		// Only assert if we got results (some package managers may not return suggestions)
 		if !sug.is_empty() {
+			// Package names differ per manager: apt has libcurl*/libssl*,
+			// brew has curl/openssl, choco has curl/openssl as well.
 			assert!(
-				sug.iter()
-					.any(|s| s.contains("libcurl") || s.contains("libssl"))
+				sug.iter().any(|s| {
+					let s = s.to_lowercase();
+					s.contains("curl") || s.contains("ssl")
+				}),
+				"expected a curl/ssl-related suggestion, got {sug:?}"
 			);
 		}
 	}

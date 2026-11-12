@@ -175,13 +175,13 @@ pub fn project_path_in(base_dir: &Path, project_name: &str) -> Result<std::path:
 	Ok(base_dir.join(project_name))
 }
 
-fn fsync_parent(path: &Path) {
+fn fsync_parent(_path: &Path) {
 	// Best-effort durability: fsync the parent directory so the rename is
 	// persisted. Failures are ignored (e.g. Windows, read-only mounts).
 	#[cfg(unix)]
 	{
 		use std::os::unix::io::AsRawFd;
-		if let Some(parent) = path.parent()
+		if let Some(parent) = _path.parent()
 			&& let Ok(file) = fs::File::open(parent)
 		{
 			unsafe {
@@ -319,14 +319,7 @@ pub fn write_atomic(path: &Path, content: &str) -> Result<()> {
 	// is moved aside first. Keep its contents in memory so a failed rename can
 	// be rolled back instead of destroying the user's build file.
 	#[cfg(target_os = "windows")]
-	let rollback: Option<String> = if path.exists() {
-		match fs::read_to_string(path) {
-			Ok(previous) => Some(previous),
-			Err(_) => None,
-		}
-	} else {
-		None
-	};
+	let rollback: Option<String> = fs::read_to_string(path).ok();
 	#[cfg(target_os = "windows")]
 	if path.exists() {
 		fs::remove_file(path).with_context(|| format!("Failed to replace {}", path.display()))?;

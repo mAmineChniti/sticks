@@ -586,7 +586,13 @@ mod tests {
 				);
 			}
 		}
-		assert!(rendered.contains(">sudo"));
+		// The generated install command must use the file's prefix too
+		// (the package manager varies by OS: apt on Debian, pacman on
+		// Arch, brew on macOS — verbs differ, so match on the prefix).
+		assert!(
+			recipe_line_after(&rendered, "install-deps").is_some_and(|line| line.starts_with('>')),
+			"expected an install-deps recipe line with '>' prefix:\n{rendered}"
+		);
 	}
 
 	#[test]
@@ -594,7 +600,30 @@ mod tests {
 		let mut makefile = Makefile::parse("all: main\n\techo hi\n").unwrap();
 		makefile.add_dependencies(&["libcurl".to_string()]).unwrap();
 		let rendered = makefile.to_makefile_string();
-		assert!(rendered.contains("\tsudo"));
+		assert!(
+			recipe_line_after(&rendered, "install-deps").is_some_and(|line| line.starts_with('\t')),
+			"expected an install-deps recipe line with tab prefix:\n{rendered}"
+		);
+	}
+
+	/// First recipe line (tab/`>`/space indented) following `target:`.
+	fn recipe_line_after<'a>(rendered: &'a str, target: &str) -> Option<&'a str> {
+		let mut in_target = false;
+		for line in rendered.lines() {
+			if line.starts_with(&format!("{target}:")) {
+				in_target = true;
+				continue;
+			}
+			if in_target {
+				if line.starts_with('\t') || line.starts_with('>') || line.starts_with(' ') {
+					return Some(line);
+				}
+				if !line.trim().is_empty() {
+					return None;
+				}
+			}
+		}
+		None
 	}
 
 	#[test]
