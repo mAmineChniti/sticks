@@ -6,25 +6,16 @@ dependency, and eject back to a plain project.
 
 ## Record an asciinema cast
 
-```bash
-asciinema rec -c ./demo/demo.sh docs/demo.cast
-```
-
-Render it for the README (SVG or GIF):
+`docs/demo.cast` is the committed recording. To re-record after
+user-visible changes:
 
 ```bash
-# SVG (embeds well, keeps text selectable)
-asciinema svg docs/demo.cast > docs/demo.svg
-
-# GIF
-agg docs/demo.cast docs/demo.gif
+cargo build --release
+asciinema rec --title "sticks demo" -c "STICKS=$PWD/target/release/sticks ./demo/demo.sh" docs/demo.cast
 ```
 
-Then embed in README.md, e.g.:
-
-```markdown
-[![demo](docs/demo.svg)](docs/demo.cast)
-```
-
-The cast file is committed so the demo stays reproducible; re-record after
-user-visible changes.
+To embed a playable version on the web, upload the cast to
+<https://asciinema.org/> and link the player URL from the README, or render
+an SVG locally with `svg-term-cli` (`svg-term --in docs/demo.cast
+--out docs/demo.svg`) — note that asciinema 2.4 no longer ships a built-in
+`svg` subcommand.
