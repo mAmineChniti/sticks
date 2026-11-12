@@ -85,4 +85,4 @@ jobs:
           # which points CMAKE_TOOLCHAIN_FILE at build/conan_toolchain.cmake
           cmake --preset release
           cmake --build --preset release
-          ./build/release/pkgtest
+          ./bin/pkgtest
