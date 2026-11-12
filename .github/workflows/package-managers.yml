@@ -1,0 +1,85 @@
+name: Package Managers (real installs)
+
+# These jobs run REAL package-manager installs (vcpkg ports, Conan
+# packages). They are intentionally separate from the unit-test workflow
+# so fixtures/mocks stay fast and hermetic.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  vcpkg-manifest:
+    name: vcpkg manifest-mode install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+
+      - name: Build sticks
+        run: cargo build --release
+
+      - name: Bootstrap vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg-repo
+          ./vcpkg-repo/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Create project and add dependency
+        working-directory: ${{ github.workspace }}
+        run: |
+          export PATH="$PWD/target/release:$PATH"
+          sticks cpp demo -p vcpkg --build cmake
+          cd demo
+          sticks add zlib
+
+      - name: Install and build with vcpkg
+        working-directory: ${{ github.workspace }}/demo
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg-repo
+        run: |
+          sticks build
+          sticks run
+
+  conan-manifest:
+    name: Conan manifest install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust and Conan
+        run: |
+          pipx install conan || pip install conan
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+
+      - name: Build sticks
+        run: cargo build --release
+
+      - name: Create project and add dependency
+        run: |
+          export PATH="$PWD/target/release:$PATH"
+          sticks cpp demo -p conan --build cmake
+          cd demo
+          sticks add zlib/1.3.1
+
+      - name: Install dependencies with Conan
+        working-directory: ${{ github.workspace }}/demo
+        run: |
+          conan install . --build=missing --output-folder=build -s build_type=Release
+
+      - name: Configure, build and run
+        working-directory: ${{ github.workspace }}/demo
+        run: |
+          export PATH="$PWD/target/release:$PATH"
+          cmake --preset conan
+          cmake --build build --config Release
+          ./bin/demo
