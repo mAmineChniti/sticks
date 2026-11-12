@@ -790,10 +790,29 @@ impl DependencyManager {
 		}
 
 		if !added.is_empty() {
+			// Record a reproducible baseline when we can identify the local
+			// vcpkg checkout; otherwise leave it to `vcpkg install`.
+			let mut baseline_note = None;
+			if json.get("builtin-baseline").is_none()
+				&& let Some(baseline) = detect_vcpkg_baseline()
+				&& let Some(object) = json.as_object_mut()
+			{
+				object.insert("builtin-baseline".to_string(), serde_json::json!(baseline));
+				baseline_note = Some(baseline);
+			}
+
 			write_atomic(Path::new(vcpkg_path), &serde_json::to_string_pretty(&json)?)
 				.context("Failed to write vcpkg.json")?;
 
 			println!("✓ Added dependencies to vcpkg.json: {:?}", added);
+			if let Some(baseline) = baseline_note {
+				println!(
+					"  Recorded builtin-baseline {} for reproducible installs",
+					baseline
+				);
+			} else if json.get("builtin-baseline").is_none() {
+				println!("  ℹ No builtin-baseline recorded; run `vcpkg install` to pin one");
+			}
 		} else {
 			println!("ℹ All specified dependencies already present in vcpkg.json");
 		}
@@ -1641,6 +1660,37 @@ fn parse_vcpkg_dependency(value: &str) -> Result<(String, Option<String>)> {
 	}
 
 	Ok((normalize_vcpkg_name(value), None))
+}
+
+/// Best-effort `builtin-baseline` for vcpkg.json: the HEAD commit of a
+/// local vcpkg checkout (`VCPKG_ROOT` or `./vcpkg`). Returns `None` when no
+/// checkout is identifiable — `vcpkg install` records the baseline then.
+fn detect_vcpkg_baseline() -> Option<String> {
+	let mut candidates = Vec::new();
+	if let Some(root) = std::env::var_os("VCPKG_ROOT") {
+		candidates.push(std::path::PathBuf::from(root));
+	}
+	candidates.push(std::path::PathBuf::from("vcpkg"));
+
+	for dir in candidates {
+		let Ok(output) = std::process::Command::new("git")
+			.args(["-C"])
+			.arg(&dir)
+			.arg("rev-parse")
+			.arg("HEAD")
+			.stdin(std::process::Stdio::null())
+			.output()
+		else {
+			continue;
+		};
+		if output.status.success() {
+			let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
+			if sha.len() == 40 && sha.chars().all(|c| c.is_ascii_hexdigit()) {
+				return Some(sha);
+			}
+		}
+	}
+	None
 }
 
 #[cfg(test)]
