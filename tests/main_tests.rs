@@ -145,3 +145,22 @@ fn test_cli_completions_and_man() {
 	let man_out = String::from_utf8_lossy(&man.stdout);
 	assert!(man_out.contains(".TH sticks 1"));
 }
+
+#[test]
+fn test_cli_doctor() {
+	let output = Command::new(sticks_binary())
+		.arg("doctor")
+		.output()
+		.expect("Failed to execute doctor");
+	// Exit status depends on the host toolchain; on any dev/CI machine a C
+	// compiler exists, so success is expected — but the report itself is
+	// the contract.
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	assert!(
+		stdout.contains("sticks doctor"),
+		"missing header:\n{stdout}"
+	);
+	for tool in ["cc", "c++", "cmake", "make"] {
+		assert!(stdout.contains(tool), "report should mention {tool}");
+	}
+}

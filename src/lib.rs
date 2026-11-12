@@ -7,6 +7,7 @@ pub mod constants;
 pub mod dependencies;
 pub mod dependency_manager;
 pub mod docs;
+pub mod doctor;
 pub mod features;
 pub mod file_handler;
 pub mod interactive;
