@@ -104,15 +104,28 @@ fn conan_configure_preset(ninja: bool) -> Value {
 	preset
 }
 
-/// Fresh `CMakePresets.json` content for a new CMake project.
-pub fn generate_cmake_presets(include_conan: bool, ninja: bool) -> String {
+/// Configure presets sticks generates. For Conan projects the hidden
+/// `conan` base preset carries the toolchain file and `debug`/`release`
+/// inherit it, so `cmake --preset debug` works after `conan install`.
+fn configure_presets(include_conan: bool, ninja: bool) -> Vec<Value> {
 	let mut configure = vec![
 		configure_preset("debug", "Debug", ninja),
 		configure_preset("release", "Release", ninja),
 	];
 	if include_conan {
+		for preset in &mut configure {
+			if let Some(object) = preset.as_object_mut() {
+				object.insert("inherits".to_string(), json!("conan"));
+			}
+		}
 		configure.push(conan_configure_preset(ninja));
 	}
+	configure
+}
+
+/// Fresh `CMakePresets.json` content for a new CMake project.
+pub fn generate_cmake_presets(include_conan: bool, ninja: bool) -> String {
+	let configure = configure_presets(include_conan, ninja);
 	let presets = json!({
 		"version": 6,
 		"cmakeMinimumRequired": {"major": 3, "minor": 21, "patch": 0},
@@ -183,14 +196,7 @@ pub fn merge_cmake_presets(content: &str, include_conan: bool, ninja: bool) -> R
 		Ok(())
 	};
 
-	let mut configure = vec![
-		configure_preset("debug", "Debug", ninja),
-		configure_preset("release", "Release", ninja),
-	];
-	if include_conan {
-		configure.push(conan_configure_preset(ninja));
-	}
-	merge_array("configurePresets", configure)?;
+	merge_array("configurePresets", configure_presets(include_conan, ninja))?;
 	merge_array(
 		"buildPresets",
 		vec![
