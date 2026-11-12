@@ -67,7 +67,8 @@ impl PackageManagerGenerator for ConanGenerator {
 		2. Add dependencies to conanfile.txt in [requires] section:\n\
 		   Example: libcurl/7.85.0\n\
 		3. Install dependencies: conan install . --build=missing\n\
-		4. Use generated CMake toolchain in your CMakeLists.txt"
+		4. For reproducible builds, commit a lockfile: conan lock create conanfile.txt\n\
+		5. Use generated CMake toolchain in your CMakeLists.txt"
 			.to_string()
 	}
 }
@@ -104,6 +105,8 @@ impl PackageManagerGenerator for VcpkgGenerator {
 		3. Add dependencies to vcpkg.json in \"dependencies\" array:\n\
 		   Example: \"libcurl:x64-linux\"\n\
 		4. Install: ./vcpkg/vcpkg install\n\
+		   (records builtin-baseline in vcpkg.json; sticks does this\n\
+		   automatically when it can detect your vcpkg checkout)\n\
 		5. Use vcpkg toolchain in CMakeLists.txt:\n\
 		   -DCMAKE_TOOLCHAIN_FILE=./vcpkg/scripts/buildsystems/vcpkg.cmake"
 			.to_string()
