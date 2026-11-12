@@ -163,7 +163,11 @@ CXXFLAGS = -Wall
 	manager.add_to_makefile(&makefile_path).unwrap();
 
 	let result = fs::read_to_string(&makefile_path).unwrap();
-	assert!(result.contains("libmylib.so"));
+	let expected = format!("libmylib{}", TargetType::SharedLibrary.file_extension());
+	assert!(
+		result.contains(&expected),
+		"expected {expected} in:\n{result}"
+	);
 	assert!(result.contains("src/lib.cpp"));
 }
 
@@ -185,7 +189,11 @@ CXXFLAGS = -Wall
 	manager.add_to_makefile(&makefile_path).unwrap();
 
 	let result = fs::read_to_string(&makefile_path).unwrap();
-	assert!(result.contains("libmylib.a"));
+	let expected = format!("libmylib{}", TargetType::StaticLibrary.file_extension());
+	assert!(
+		result.contains(&expected),
+		"expected {expected} in:\n{result}"
+	);
 	assert!(result.contains("src/lib.cpp"));
 }
 
