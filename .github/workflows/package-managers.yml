@@ -81,7 +81,8 @@ jobs:
       - name: Configure, build and run
         working-directory: ${{ github.workspace }}/pkgtest
         run: |
-          export PATH="$PWD/target/release:$PATH"
-          cmake --preset conan
-          cmake --build build --config Release
-          ./bin/pkgtest
+          # debug/release presets inherit the hidden conan base preset,
+          # which points CMAKE_TOOLCHAIN_FILE at build/conan_toolchain.cmake
+          cmake --preset release
+          cmake --build --preset release
+          ./build/release/pkgtest
