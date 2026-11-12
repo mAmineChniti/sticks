@@ -156,7 +156,10 @@ fn test_cli_doctor() {
 	// compiler exists, so success is expected — but the report itself is
 	// the contract.
 	let stdout = String::from_utf8_lossy(&output.stdout);
-	assert!(stdout.contains("sticks doctor"), "missing header:\n{stdout}");
+	assert!(
+		stdout.contains("sticks doctor"),
+		"missing header:\n{stdout}"
+	);
 	for tool in ["cc", "c++", "cmake", "make"] {
 		assert!(stdout.contains(tool), "report should mention {tool}");
 	}
