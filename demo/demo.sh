@@ -8,45 +8,60 @@
 #   agg demo.cast demo.gif
 #
 # DEMO_PACE controls the pause between beats in seconds (default 0.6);
-# set DEMO_PACE=0 for a fast run.
+# set DEMO_PACE=0 for a fast run. Colors are emitted on TTYs (including
+# the asciinema pty) so the recording looks right in the GIF.
 set -euo pipefail
 
 STICKS="${STICKS:-sticks}"
 PACE="${DEMO_PACE:-0.6}"
+if [ -t 1 ]; then
+	BOLD=$'\033[1m'
+	CYAN=$'\033[1;36m'
+	YELLOW=$'\033[1;33m'
+	DIM=$'\033[2m'
+	RESET=$'\033[0m'
+else
+	BOLD=''; CYAN=''; YELLOW=''; DIM=''; RESET=''
+fi
+
 beat() { [ "$PACE" != "0" ] && sleep "$PACE" || true; }
+
+# Echo the command in yellow, then run it — viewers see what's happening.
+run() {
+	printf '%s$ %s%s\n' "$YELLOW" "$*" "$RESET"
+	"$@"
+}
+
+header() {
+	printf '\n%s=== %s ===%s\n' "$CYAN" "$1" "$RESET"
+	beat
+}
 
 cd "$(mktemp -d)"
 
-echo '=== 1. Create a C++ project ==='
-beat
-$STICKS cpp demo --build cmake
+header '1. Create a C++ project'
+run $STICKS cpp demo --build cmake
 cd demo
 beat
 
-echo
-echo '=== 2. Build, run, test, clean ==='
+header '2. Build, run, test, clean'
+run $STICKS build
 beat
-$STICKS build
+run $STICKS run
 beat
-$STICKS run
+run $STICKS test || true   # no tests configured yet — error is expected and clear
 beat
-$STICKS test || true   # no tests configured yet — error is expected and clear
-beat
-$STICKS clean
+run $STICKS clean
 beat
 
-echo
-echo '=== 3. Add a dependency (dry-run first) ==='
+header '3. Add a dependency (dry-run first)'
+run $STICKS add --dry-run fmt@10.2.1
 beat
-$STICKS add --dry-run fmt@10.2.1
+run $STICKS add fmt@10.2.1
 beat
-$STICKS add fmt@10.2.1
-beat
-$STICKS remove fmt@10.2.1
+run $STICKS remove fmt@10.2.1
 beat
 
-echo
-echo '=== 4. Eject: back to a plain project ==='
-beat
-$STICKS eject
+header '4. Eject: back to a plain project'
+run $STICKS eject
 ls -a
