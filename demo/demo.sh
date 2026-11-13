@@ -27,8 +27,9 @@ fi
 beat() { [ "$PACE" != "0" ] && sleep "$PACE" || true; }
 
 # Echo the command in yellow, then run it — viewers see what's happening.
+# $STICKS is always argv[1]; display it as `sticks` regardless of path.
 run() {
-	printf '%s$ %s%s\n' "$YELLOW" "$*" "$RESET"
+	printf '%s$ sticks %s%s\n' "$YELLOW" "${*:2}" "$RESET"
 	"$@"
 }
 
