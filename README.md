@@ -176,6 +176,14 @@ sticks test
 sticks clean
 ```
 
+## Demo
+
+![sticks demo](docs/demo.gif)
+
+The full new-user flow — scaffold, build/run/test, add a pinned dependency,
+and eject back to a plain project — is recorded in `docs/demo.cast`
+(re-recordable via `demo/demo.sh`, see `docs/demo.md`).
+
 ## Usage
 
 ### Interactive Mode
