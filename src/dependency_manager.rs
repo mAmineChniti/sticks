@@ -339,6 +339,10 @@ impl DependencyManager {
 
 		for dependency in &dep_names {
 			validate_conan_dependency(dependency)?;
+			if registry_checks_enabled() {
+				let check = crate::package_checker::check_conan_package(dependency);
+				enforce_registry_check(check, "ConanCenter", dependency)?;
+			}
 		}
 		if is_python {
 			Self::add_to_conan_py(conanfile_path, &dep_names)
@@ -749,6 +753,10 @@ impl DependencyManager {
 			let dep_str = dep.as_str();
 
 			let (package_name, version) = parse_vcpkg_dependency(dep_str)?;
+			if registry_checks_enabled() {
+				let check = crate::package_checker::check_vcpkg_package(&package_name);
+				enforce_registry_check(check, "vcpkg", &package_name)?;
+			}
 			let existing = dependencies.iter().find(|entry| {
 				entry
 					.as_str()
@@ -1375,6 +1383,45 @@ fn parse_self_requires(line: &str) -> Option<String> {
 	// `self.requires("foo", override=True)` and multiline calls when the
 	// caller passes a joined block).
 	extract_python_strings(rest).into_iter().next()
+}
+
+/// Registry verification can be disabled with
+/// `STICKS_NO_REGISTRY_CHECK=1` (offline environments, tests).
+fn registry_checks_enabled() -> bool {
+	std::env::var_os("STICKS_NO_REGISTRY_CHECK").is_none()
+}
+
+/// Enforce a registry verification result: bail on a confirmed miss
+/// (with suggestions when available), warn-and-continue when the
+/// registry could not be reached at all.
+fn enforce_registry_check(
+	check: crate::package_checker::RegistryCheck,
+	ecosystem: &str,
+	name: &str,
+) -> Result<()> {
+	use crate::package_checker::RegistryCheck;
+	match check {
+		RegistryCheck::Verified => Ok(()),
+		RegistryCheck::NotFound(suggestions) => {
+			if let Some(first) = suggestions.first() {
+				bail!(
+					"{} package '{}' not found. Did you mean '{}'?",
+					ecosystem,
+					name,
+					first
+				);
+			} else {
+				bail!("{} package '{}' not found.", ecosystem, name);
+			}
+		}
+		RegistryCheck::Unavailable => {
+			println!(
+				"⚠ Could not verify '{}' against {} (registry unreachable); continuing.",
+				name, ecosystem
+			);
+			Ok(())
+		}
+	}
 }
 
 fn build_dependency_names(

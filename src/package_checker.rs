@@ -368,9 +368,193 @@ pub fn suggest_similar(name: &str, pm: SystemPackageManager) -> Result<Vec<Strin
 		.collect())
 }
 
+/// Outcome of checking a package name against a package registry
+/// (vcpkg ports tree or ConanCenter).
+#[derive(Debug, PartialEq, Eq)]
+pub enum RegistryCheck {
+	/// The package exists in the registry.
+	Verified,
+	/// The registry was queried and the package does not exist.
+	/// Contains up to 3 suggested alternatives.
+	NotFound(Vec<String>),
+	/// The registry could not be queried (offline, tool or checkout
+	/// missing). Callers should warn and proceed.
+	Unavailable,
+}
+
+/// Candidate vcpkg installation roots: `$VCPKG_ROOT`, `./vcpkg`, and the
+/// parent directory of a `vcpkg` executable found on `PATH`.
+fn vcpkg_roots() -> Vec<std::path::PathBuf> {
+	let mut roots = Vec::new();
+	if let Some(root) = std::env::var_os("VCPKG_ROOT") {
+		roots.push(std::path::PathBuf::from(root));
+	}
+	roots.push(std::path::PathBuf::from("vcpkg"));
+	if let Some(paths) = std::env::var_os("PATH") {
+		for dir in std::env::split_paths(&paths) {
+			for exe in ["vcpkg", "vcpkg.exe"] {
+				if dir.join(exe).is_file() {
+					roots.push(dir.clone());
+					break;
+				}
+			}
+		}
+	}
+	roots
+}
+
+fn suggest_ports(name: &str) -> Vec<String> {
+	let mut candidates = Vec::new();
+	for root in vcpkg_roots() {
+		let ports = root.join("ports");
+		if !ports.is_dir() {
+			continue;
+		}
+		if let Ok(entries) = std::fs::read_dir(&ports) {
+			for entry in entries.flatten() {
+				if entry.path().is_dir()
+					&& let Some(candidate) = entry.file_name().to_str()
+				{
+					candidates.push(candidate.to_string());
+				}
+			}
+		}
+	}
+	candidates.sort();
+	candidates.dedup();
+
+	let max_distance = name.chars().count().div_ceil(3).max(2);
+	let mut scored: Vec<(usize, String)> = candidates
+		.into_iter()
+		.map(|candidate| (levenshtein(name, &candidate), candidate))
+		.filter(|(distance, _)| *distance <= max_distance)
+		.collect();
+	scored.sort_by_key(|(distance, _)| *distance);
+	scored
+		.into_iter()
+		.take(3)
+		.map(|(_, candidate)| candidate)
+		.collect()
+}
+
+/// Verify a vcpkg port name against a local vcpkg checkout's `ports/`
+/// directory. Overlay-registry-only ports are not covered.
+pub fn check_vcpkg_package(name: &str) -> RegistryCheck {
+	if validate_package_name(name).is_err() {
+		return RegistryCheck::NotFound(Vec::new());
+	}
+	let name = name.to_lowercase();
+	let mut saw_ports_tree = false;
+	for root in vcpkg_roots() {
+		let ports = root.join("ports");
+		if !ports.is_dir() {
+			continue;
+		}
+		saw_ports_tree = true;
+		if ports.join(&name).is_dir() {
+			return RegistryCheck::Verified;
+		}
+	}
+	if !saw_ports_tree {
+		return RegistryCheck::Unavailable;
+	}
+	RegistryCheck::NotFound(suggest_ports(&name))
+}
+
+fn url_encode_query(value: &str) -> String {
+	let mut out = String::with_capacity(value.len());
+	for byte in value.bytes() {
+		if byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'~') {
+			out.push(byte as char);
+		} else {
+			out.push_str(&format!("%{byte:02X}"));
+		}
+	}
+	out
+}
+
+/// Extract the recipe base name from a Conan reference such as
+/// `zlib/1.2.13`, `zlib/1.2.13@user/channel`, or the `zlib@1.2` shorthand.
+pub fn conan_base_name(reference: &str) -> &str {
+	reference
+		.split(['/', '@'])
+		.next()
+		.unwrap_or(reference)
+		.trim()
+}
+
+/// Verify a Conan package name against the ConanCenter API
+/// (`center2.conan.io`). Requires `curl` and network access; returns
+/// `Unavailable` when either is missing so callers can proceed with a
+/// warning instead of blocking offline work.
+pub fn check_conan_package(name: &str) -> RegistryCheck {
+	let base = conan_base_name(name);
+	if base.is_empty() || validate_package_name(base).is_err() {
+		return RegistryCheck::NotFound(Vec::new());
+	}
+	let url = format!(
+		"https://center2.conan.io/v2/conans/search?q={}",
+		url_encode_query(base)
+	);
+	let output = Command::new("curl")
+		.args(["-fsS", "--max-time", "10"])
+		.arg(&url)
+		.stdin(std::process::Stdio::null())
+		.output();
+	let Ok(output) = output else {
+		return RegistryCheck::Unavailable;
+	};
+	if !output.status.success() {
+		return RegistryCheck::Unavailable;
+	}
+	let Ok(json) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
+		return RegistryCheck::Unavailable;
+	};
+	let Some(results) = json.get("results").and_then(|r| r.as_array()) else {
+		return RegistryCheck::Unavailable;
+	};
+
+	let mut names: Vec<String> = results
+		.iter()
+		.filter_map(|entry| entry.as_str())
+		.map(|reference| conan_base_name(reference).to_lowercase())
+		.collect();
+	names.sort();
+	names.dedup();
+
+	if names.iter().any(|n| n == &base.to_lowercase()) {
+		return RegistryCheck::Verified;
+	}
+	RegistryCheck::NotFound(names.into_iter().take(3).collect())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_conan_base_name() {
+		assert_eq!(conan_base_name("zlib/1.2.13"), "zlib");
+		assert_eq!(conan_base_name("zlib/1.2.13@user/channel"), "zlib");
+		assert_eq!(conan_base_name("zlib@1.2"), "zlib");
+		assert_eq!(conan_base_name("boost"), "boost");
+	}
+
+	#[test]
+	fn test_url_encode_query() {
+		assert_eq!(url_encode_query("zlib"), "zlib");
+		assert_eq!(url_encode_query("foo.bar-baz_1~2"), "foo.bar-baz_1~2");
+		assert_eq!(url_encode_query("a b"), "a%20b");
+	}
+
+	#[test]
+	fn test_check_vcpkg_package_rejects_invalid() {
+		// Names failing validation must never reach the filesystem checks.
+		assert_eq!(
+			check_vcpkg_package("bad name"),
+			RegistryCheck::NotFound(Vec::new())
+		);
+	}
 
 	#[test]
 	fn test_suggest_similar_fallback() {

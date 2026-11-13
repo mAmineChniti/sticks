@@ -276,6 +276,12 @@ configured:
 - `conanfile.txt` / `conanfile.py` `[requires]` for Conan (`name@1.2.3` becomes `name/1.2.3`)
 - `vcpkg.json` `dependencies` for vcpkg (`name@1.2.3` becomes `"version>=1.2.3"`)
 
+Package names are verified before writing: Conan packages are checked against
+ConanCenter, vcpkg ports against your local vcpkg checkout's `ports/` tree,
+and `--system` packages against your OS package manager — with suggestions on
+misses. Set `STICKS_NO_REGISTRY_CHECK=1` to skip registry verification
+(offline environments).
+
 Otherwise:
 - Makefile: `install-deps` target (system packages) + `LDLIBS` where a mapping is known — use `--system` to make this explicit
 - CMake: `find_package()` + `target_link_libraries()`
