@@ -38,7 +38,7 @@ fn test_generate_editorconfig() {
 fn test_generate_clang_format_c() {
 	let config = generate_clang_format_config(Language::C);
 	assert!(config.contains("Language: C"));
-	assert!(config.contains("Standard: C11"));
+	assert!(!config.contains("Standard:"));
 	assert!(config.contains("IndentWidth: 4"));
 	assert!(config.contains("ColumnLimit: 100"));
 	assert!(config.contains("BreakBeforeBraces: Linux"));
@@ -48,7 +48,7 @@ fn test_generate_clang_format_c() {
 fn test_generate_clang_format_cpp() {
 	let config = generate_clang_format_config(Language::Cpp);
 	assert!(config.contains("Language: Cpp"));
-	assert!(config.contains("Standard: C++17"));
+	assert!(config.contains("Standard: c++20"));
 	assert!(config.contains("IndentWidth: 4"));
 	assert!(config.contains("ColumnLimit: 100"));
 	assert!(config.contains("Cpp11BracedListStyle: true"));

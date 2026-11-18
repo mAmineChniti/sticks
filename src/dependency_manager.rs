@@ -10,6 +10,17 @@ use crate::{
 	features::{detect_build_file, detect_build_system, detect_package_manager},
 };
 
+/// Print the outcome of a dependency edit, using "would" wording when the
+/// global `--dry-run` flag is active (the diff itself is printed by
+/// `write_atomic`, so claiming the change was applied would be misleading).
+fn report_change(past_tense: &str, present_tense: &str, target: &str, deps: &[String]) {
+	if crate::file_handler::dry_run() {
+		println!("would {present_tense} dependencies {target}: {deps:?}");
+	} else {
+		println!("✓ {past_tense} dependencies {target}: {deps:?}");
+	}
+}
+
 /// Universal dependency manager that routes to the appropriate handler
 /// based on detected build system and package manager
 pub struct DependencyManager;
@@ -197,7 +208,7 @@ impl DependencyManager {
 		write_atomic(&makefile_path, &content).context("Failed to write Makefile")?;
 
 		if !added.is_empty() {
-			println!("✓ Added dependencies to Makefile: {:?}", added);
+			report_change("Added", "add", "to Makefile", &added);
 		} else {
 			println!("ℹ All specified dependencies already present in Makefile");
 		}
@@ -219,7 +230,7 @@ impl DependencyManager {
 
 		write_atomic(&makefile_path, &content).context("Failed to write Makefile")?;
 
-		println!("✓ Removed dependencies from Makefile: {:?}", removed);
+		report_change("Removed", "remove", "from Makefile", &removed);
 		Ok(removed)
 	}
 
@@ -283,7 +294,7 @@ impl DependencyManager {
 		cmake.write_to_file(&cmake_path)?;
 
 		if !added.is_empty() {
-			println!("✓ Added dependencies to CMakeLists.txt: {:?}", added);
+			report_change("Added", "add", "to CMakeLists.txt", &added);
 		} else {
 			println!("ℹ All specified dependencies already present in CMakeLists.txt");
 		}
@@ -303,7 +314,7 @@ impl DependencyManager {
 
 		cmake.write_to_file(&cmake_path)?;
 
-		println!("✓ Removed dependencies from CMakeLists.txt: {:?}", removed);
+		report_change("Removed", "remove", "from CMakeLists.txt", &removed);
 		Ok(removed)
 	}
 
@@ -401,7 +412,7 @@ impl DependencyManager {
 			write_atomic(Path::new(conanfile_path), &lines.join("\n"))
 				.context("Failed to write conanfile")?;
 
-			println!("✓ Added dependencies to conanfile: {:?}", added);
+			report_change("Added", "add", "to conanfile", &added);
 		} else {
 			println!("ℹ All specified dependencies already present in conanfile");
 		}
@@ -543,7 +554,7 @@ impl DependencyManager {
 			write_atomic(Path::new(conanfile_path), &lines.join("\n"))
 				.context("Failed to write conanfile.py")?;
 
-			println!("✓ Added dependencies to conanfile.py: {:?}", added);
+			report_change("Added", "add", "to conanfile.py", &added);
 		} else {
 			println!("ℹ All specified dependencies already present in conanfile.py");
 		}
@@ -610,7 +621,7 @@ impl DependencyManager {
 		write_atomic(Path::new(conanfile_path), &lines.join("\n"))
 			.context("Failed to write conanfile")?;
 
-		println!("✓ Removed dependencies from conanfile: {:?}", removed);
+		report_change("Removed", "remove", "from conanfile", &removed);
 		Ok(removed)
 	}
 
@@ -720,7 +731,7 @@ impl DependencyManager {
 		}
 		write_atomic(Path::new(conanfile_path), &rendered)
 			.context("Failed to write conanfile.py")?;
-		println!("Removed dependencies from conanfile.py: {:?}", removed);
+		report_change("Removed", "remove", "from conanfile.py", &removed);
 		Ok(removed)
 	}
 
@@ -812,12 +823,19 @@ impl DependencyManager {
 			write_atomic(Path::new(vcpkg_path), &serde_json::to_string_pretty(&json)?)
 				.context("Failed to write vcpkg.json")?;
 
-			println!("✓ Added dependencies to vcpkg.json: {:?}", added);
+			report_change("Added", "add", "to vcpkg.json", &added);
 			if let Some(baseline) = baseline_note {
-				println!(
-					"  Recorded builtin-baseline {} for reproducible installs",
-					baseline
-				);
+				if crate::file_handler::dry_run() {
+					println!(
+						"  would record builtin-baseline {} for reproducible installs",
+						baseline
+					);
+				} else {
+					println!(
+						"  Recorded builtin-baseline {} for reproducible installs",
+						baseline
+					);
+				}
 			} else if json.get("builtin-baseline").is_none() {
 				println!("  ℹ No builtin-baseline recorded; run `vcpkg install` to pin one");
 			}
@@ -871,7 +889,7 @@ impl DependencyManager {
 		write_atomic(Path::new(vcpkg_path), &serde_json::to_string_pretty(&json)?)
 			.context("Failed to write vcpkg.json")?;
 
-		println!("✓ Removed dependencies from vcpkg.json: {:?}", removed);
+		report_change("Removed", "remove", "from vcpkg.json", &removed);
 		Ok(removed)
 	}
 

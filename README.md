@@ -488,7 +488,7 @@ Configure C++ standard, compiler flags, preprocessor definitions, and directorie
 
 ```bash
 # Set C++ standard (applied immediately)
-sticks config set-cpp-standard 17
+sticks config set-cpp-standard 20
 
 # Add compiler flags (applied immediately)
 sticks config add-flag -Wall -O2

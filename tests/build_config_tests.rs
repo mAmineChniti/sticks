@@ -22,6 +22,18 @@ fn test_cpp_standard_flags() {
 }
 
 #[test]
+fn test_cpp_standard_default() {
+	assert_eq!(CppStandard::default(), CppStandard::Cpp20);
+}
+
+#[test]
+fn test_cpp_standard_clang_format_flag_is_lowercase() {
+	assert_eq!(CppStandard::Cpp17.to_clang_format_flag(), "c++17");
+	assert_eq!(CppStandard::Cpp20.to_clang_format_flag(), "c++20");
+	assert_eq!(CppStandard::Cpp23.to_clang_format_flag(), "c++23");
+}
+
+#[test]
 fn test_compiler_flags() {
 	let mut flags = CompilerFlags::new();
 	flags.add_flag("-Wall");

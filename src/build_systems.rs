@@ -1,3 +1,4 @@
+use crate::CppStandard;
 use crate::languages::{Language, LanguageConsts};
 use std::str::FromStr;
 
@@ -105,6 +106,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 		let flags_guard = format!(
 			"if(NOT MSVC)\n\tset({warning_flags} \"${{{warning_flags}}} -Wall -Wextra -Werror\")\nendif()\n"
 		);
+		let cpp_standard = CppStandard::default().to_cmake_flag();
 		match language {
 			Language::C => format!(
 				"cmake_minimum_required(VERSION 3.21)\n\
@@ -129,7 +131,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 				{compiler_prelude}\
 				project({project_name} {lang})\n\
 				\n\
-				set(CMAKE_CXX_STANDARD 17)\n\
+				set(CMAKE_CXX_STANDARD {cpp_standard})\n\
 				set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\
 				{flags_guard}\
 				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\

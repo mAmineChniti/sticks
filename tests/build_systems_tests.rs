@@ -59,7 +59,7 @@ fn test_cmake_generator() {
 
 	let cmake_cpp = generator.generate_build_file(Language::Cpp, "test_project");
 	assert!(cmake_cpp.contains("project(test_project CXX)"));
-	assert!(cmake_cpp.contains("CMAKE_CXX_STANDARD 17"));
+	assert!(cmake_cpp.contains("CMAKE_CXX_STANDARD 20"));
 	assert!(cmake_cpp.contains("file(GLOB_RECURSE SOURCES"));
 }
 

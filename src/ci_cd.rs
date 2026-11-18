@@ -1,3 +1,4 @@
+use crate::CppStandard;
 use crate::build_systems::BuildSystem;
 use crate::file_handler::{ensure_path_available, write_atomic};
 use crate::test_framework::TestFramework;
@@ -562,7 +563,7 @@ fn gitlab_test_step(build_system: BuildSystem, configuration: &TestConfiguration
 fn clang_tidy_command(build_system: BuildSystem, language: &str) -> String {
 	let files = r"find src -type f \( -iname '*.c' -o -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' -o -iname '*.c++' \)";
 	let standard = if language.eq_ignore_ascii_case("cpp") || language.eq_ignore_ascii_case("c++") {
-		"-std=c++17"
+		CppStandard::default().to_gcc_flag()
 	} else {
 		"-std=c11"
 	};

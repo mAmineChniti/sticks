@@ -408,7 +408,7 @@ pub fn eject_project_in(dir: &Path) -> Result<()> {
 		.unwrap_or(0);
 	if stray_backups > 0 {
 		println!(
-			"ℹ {} backup file(s) matching '*.sticks.bak' left in place; delete them when ready.",
+			"ℹ {} backup file(s) left in place; delete them when ready.",
 			stray_backups
 		);
 	}

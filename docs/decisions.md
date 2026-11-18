@@ -63,3 +63,15 @@ GitHub-release integrity is the current trust anchor.
 `sticks test add|generate` still manage test frameworks. This is a
 behavior change from erroring on bare `sticks test`, matching user
 expectation from other ecosystems.
+
+## D10 — Default C++ standard
+
+Generated C++ projects default to C++20 (`CppStandard::default()`), used
+consistently by CMake (`CMAKE_CXX_STANDARD 20`), Makefiles
+(`-std=c++20`), CI clang-tidy fallbacks and `.clang-format`
+(`Standard: c++20`). It is new enough to be useful in 2026 while still
+supported by GCC 10+, Clang 10+ and MSVC 2019 16.11+, whereas C++23
+needs considerably newer toolchains. `sticks config set-cpp-standard`
+still allows 11, 14, 17, 20 or 23 per project. `Standard` in
+`.clang-format` must use clang-format's lowercase spelling; C projects
+omit it because clang-format has no C standard values.

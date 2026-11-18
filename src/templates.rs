@@ -1,4 +1,4 @@
-use crate::{BuildSystem, languages::Language};
+use crate::{BuildSystem, CppStandard, languages::Language};
 use std::path::Path;
 
 pub fn generate_gitignore(language: Language) -> String {
@@ -63,9 +63,10 @@ pub fn generate_editorconfig() -> String {
 
 pub fn generate_clang_format_config(language: Language) -> String {
 	match language {
+		// clang-format's `Standard` option only accepts C++ standards, so
+		// there is no valid value to set for a C project.
 		Language::C => "---\n\
 			Language: C\n\
-			Standard: C11\n\
 			IndentWidth: 4\n\
 			UseTab: ForContinuationAndIndentation\n\
 			TabWidth: 4\n\
@@ -75,19 +76,23 @@ pub fn generate_clang_format_config(language: Language) -> String {
 			BreakBeforeBraces: Linux\n\
 			SpaceAfterCStyleCast: true\n"
 			.to_string(),
-		Language::Cpp => "---\n\
-			Language: Cpp\n\
-			Standard: C++17\n\
-			IndentWidth: 4\n\
-			UseTab: ForContinuationAndIndentation\n\
-			TabWidth: 4\n\
-			ColumnLimit: 100\n\
-			AllowShortFunctionsOnASingleLine: Empty\n\
-			AllowShortIfStatementsOnASingleLine: Never\n\
-			BreakBeforeBraces: Linux\n\
-			SpaceAfterCStyleCast: true\n\
-			Cpp11BracedListStyle: true\n"
-			.to_string(),
+		Language::Cpp => {
+			let standard = CppStandard::default().to_clang_format_flag();
+			format!(
+				"---\n\
+				Language: Cpp\n\
+				Standard: {standard}\n\
+				IndentWidth: 4\n\
+				UseTab: ForContinuationAndIndentation\n\
+				TabWidth: 4\n\
+				ColumnLimit: 100\n\
+				AllowShortFunctionsOnASingleLine: Empty\n\
+				AllowShortIfStatementsOnASingleLine: Never\n\
+				BreakBeforeBraces: Linux\n\
+				SpaceAfterCStyleCast: true\n\
+				Cpp11BracedListStyle: true\n"
+			)
+		}
 	}
 }
 

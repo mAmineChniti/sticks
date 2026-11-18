@@ -1,3 +1,4 @@
+use crate::CppStandard;
 use anyhow::Context;
 use std::fs;
 use std::path::Path;
@@ -99,7 +100,7 @@ fn makefile_flags_variable(extension: &str) -> &'static str {
 
 fn makefile_standard_flag(extension: &str) -> &'static str {
 	if is_cpp_extension(extension) {
-		"-std=c++17"
+		CppStandard::default().to_gcc_flag()
 	} else {
 		"-std=c11"
 	}
@@ -230,14 +231,16 @@ impl LanguageConsts for Language {
 		match self {
 			Language::C => String::from(
 				"#include <stdio.h>\n\n\
-                 int main() {\n\
+                 int main()\n\
+                 {\n\
                  \tprintf(\"Hello, World!\\n\");\n\
                  \treturn 0;\n\
                  }\n",
 			),
 			Language::Cpp => String::from(
 				"#include <iostream>\n\n\
-                 int main() {\n\
+                 int main()\n\
+                 {\n\
                  \tstd::cout << \"Hello, World!\" << std::endl;\n\
                  \treturn 0;\n\
                  }\n",

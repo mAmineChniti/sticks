@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # sticks demo script — the "new user" flow from the README.
 #
-# Record it with asciinema:
-#   asciinema rec -c ./demo/demo.sh demo.cast
+# Record it with asciinema (80x24 keeps the rendered GIF size stable):
+#   asciinema rec --cols 80 --rows 24 -c ./demo/demo.sh demo.cast
 #
 # Or render to an SVG/GIF locally:
 #   agg demo.cast demo.gif

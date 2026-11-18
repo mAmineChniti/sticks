@@ -16,6 +16,16 @@ pub enum CppStandard {
 	Cpp23,
 }
 
+impl Default for CppStandard {
+	/// C++20 is the baseline for generated projects: it is new enough to be
+	/// useful but still supported by every compiler sticks targets (GCC 10+,
+	/// Clang 10+, MSVC 2019 16.11+). Users can opt into a different standard
+	/// with `sticks config set-cpp-standard`.
+	fn default() -> Self {
+		Self::Cpp20
+	}
+}
+
 impl FromStr for CppStandard {
 	type Err = anyhow::Error;
 
@@ -62,6 +72,18 @@ impl CppStandard {
 			CppStandard::Cpp17 => "C++17",
 			CppStandard::Cpp20 => "C++20",
 			CppStandard::Cpp23 => "C++23",
+		}
+	}
+
+	/// clang-format's `Standard` option uses lowercase names (`c++20`),
+	/// unlike the human-readable form returned by [`Self::as_str`].
+	pub fn to_clang_format_flag(&self) -> &'static str {
+		match self {
+			CppStandard::Cpp11 => "c++11",
+			CppStandard::Cpp14 => "c++14",
+			CppStandard::Cpp17 => "c++17",
+			CppStandard::Cpp20 => "c++20",
+			CppStandard::Cpp23 => "c++23",
 		}
 	}
 }

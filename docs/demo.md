@@ -11,7 +11,8 @@ user-visible changes:
 
 ```bash
 cargo build --release
-asciinema rec --title "sticks demo" -c "STICKS=$PWD/target/release/sticks ./demo/demo.sh" docs/demo.cast
+asciinema rec --overwrite --cols 80 --rows 24 --title "sticks demo" \
+  -c "STICKS=$PWD/target/release/sticks ./demo/demo.sh" docs/demo.cast
 ```
 
 `docs/demo.gif` is the committed rendered version (generated with
