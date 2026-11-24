@@ -810,17 +810,14 @@ fn is_make_utility_target(name: &str) -> bool {
 	matches!(
 		name,
 		"all"
-			| "clean"
-			| "run"
+			| "clean" | "run"
 			| "rebuild"
-			| "test"
-			| "lint"
+			| "test" | "lint"
 			| "format"
 			| "format-check"
 			| "lint-clang-tidy"
 			| "lint-cppcheck"
-			| "docs"
-			| "install-deps"
+			| "docs" | "install-deps"
 	)
 }
 
