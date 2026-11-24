@@ -84,7 +84,7 @@ See [sticks-aur repository](https://aur.archlinux.org/packages/sticks-aur) for p
 
 ```bash
 # Download the latest .deb package
-wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.4.1-1_amd64.deb
+wget https://github.com/mAmineChniti/sticks/releases/latest/download/sticks_0.6.0-1_amd64.deb
 sudo dpkg -i sticks_*.deb
 ```
 
@@ -570,7 +570,7 @@ sticks ci write gitlab
 Generated pipelines include:
 - Build stage (cmake configuration and build)
 - Test stage (ctest execution)
-- Lint stage (clang-tidy for static analysis)
+- Lint stage (clang-format check + clang-tidy static analysis)
 
 ### Multi-Target Projects
 
