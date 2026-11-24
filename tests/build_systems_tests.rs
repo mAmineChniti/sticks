@@ -44,6 +44,18 @@ fn test_makefile_generator() {
 	assert!(makefile.contains("BIN_DIR = bin"));
 	assert!(makefile.contains("all:"));
 	assert!(makefile.contains("clean:"));
+	assert!(makefile.contains("format:"));
+	assert!(makefile.contains("format-check:"));
+	assert!(makefile.contains("lint: format-check lint-clang-tidy"));
+	assert!(makefile.contains("lint-clang-tidy:"));
+	assert!(makefile.contains("CLANG_FORMAT ?= clang-format"));
+	assert!(makefile.contains("CLANG_TIDY ?= clang-tidy"));
+	assert!(makefile.contains("FORMAT_SOURCES"));
+	assert!(makefile.contains("--dry-run --Werror"));
+	assert!(
+		sticks::Makefile::parse(&makefile).is_ok(),
+		"generated Makefile must stay parseable"
+	);
 }
 
 #[test]
@@ -56,11 +68,20 @@ fn test_cmake_generator() {
 	assert!(cmake_c.contains("project(test_project C)"));
 	assert!(cmake_c.contains("CMAKE_C_STANDARD 11"));
 	assert!(cmake_c.contains("file(GLOB_RECURSE SOURCES"));
+	assert!(cmake_c.contains("add_custom_target(format"));
+	assert!(cmake_c.contains("add_custom_target(format-check"));
+	assert!(cmake_c.contains("add_custom_target(lint)"));
+	assert!(cmake_c.contains("add_custom_target(lint-clang-tidy"));
+	assert!(cmake_c.contains("add_dependencies(lint format-check lint-clang-tidy)"));
+	assert!(cmake_c.contains("--dry-run --Werror"));
+	assert!(cmake_c.contains("CMAKE_EXPORT_COMPILE_COMMANDS ON"));
 
 	let cmake_cpp = generator.generate_build_file(Language::Cpp, "test_project");
 	assert!(cmake_cpp.contains("project(test_project CXX)"));
 	assert!(cmake_cpp.contains("CMAKE_CXX_STANDARD 20"));
 	assert!(cmake_cpp.contains("file(GLOB_RECURSE SOURCES"));
+	assert!(cmake_cpp.contains("add_custom_target(format"));
+	assert!(cmake_cpp.contains("add_custom_target(lint)"));
 }
 
 #[test]

@@ -101,6 +101,7 @@ fn eject_moves_sticks_files_to_backups() {
 	let dir = tempdir("eject");
 	for name in [
 		".clang-format",
+		".clang-tidy",
 		".editorconfig",
 		".gitattributes",
 		"CMakePresets.json",
@@ -116,6 +117,7 @@ fn eject_moves_sticks_files_to_backups() {
 
 	for name in [
 		".clang-format",
+		".clang-tidy",
 		".editorconfig",
 		".gitattributes",
 		"CMakePresets.json",

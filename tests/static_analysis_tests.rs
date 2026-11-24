@@ -1,6 +1,7 @@
 use std::fs;
 use std::str::FromStr;
 use sticks::static_analysis::{StaticAnalysisGenerator, StaticAnalysisTool};
+use sticks::{BuildSystemGenerator, CMakeGenerator, Language, MakefileGenerator};
 use tempfile::TempDir;
 
 #[test]
@@ -149,4 +150,70 @@ main: main.o
 	let result = fs::read_to_string(&makefile_path).unwrap();
 	assert!(result.contains("lint:"));
 	assert!(result.contains("cppcheck"));
+}
+
+#[test]
+fn test_static_analysis_does_not_duplicate_generated_quality_targets() {
+	let temp_dir = TempDir::new().unwrap();
+	let generator = StaticAnalysisGenerator::new(StaticAnalysisTool::ClangTidy);
+
+	let cmake_path = temp_dir.path().join("CMakeLists.txt");
+	let generated = CMakeGenerator.generate_build_file(Language::Cpp, "demo");
+	let expected_targets = generated
+		.matches("add_custom_target(lint-clang-tidy")
+		.count();
+	fs::write(&cmake_path, generated).unwrap();
+	generator.add_to_cmake(&cmake_path).unwrap();
+	let cmake = fs::read_to_string(&cmake_path).unwrap();
+	assert_eq!(cmake.matches("find_program(CLANG_TIDY").count(), 1);
+	assert_eq!(
+		cmake.matches("add_custom_target(lint-clang-tidy").count(),
+		expected_targets
+	);
+
+	let makefile_path = temp_dir.path().join("Makefile");
+	fs::write(
+		&makefile_path,
+		MakefileGenerator.generate_build_file(Language::Cpp, "demo"),
+	)
+	.unwrap();
+	generator.add_to_makefile(&makefile_path).unwrap();
+	let makefile = fs::read_to_string(&makefile_path).unwrap();
+	assert_eq!(makefile.matches("lint-clang-tidy:").count(), 1);
+}
+
+#[test]
+fn test_cppcheck_joins_generated_quality_targets() {
+	let temp_dir = TempDir::new().unwrap();
+	let generator = StaticAnalysisGenerator::new(StaticAnalysisTool::Cppcheck);
+
+	let cmake_path = temp_dir.path().join("CMakeLists.txt");
+	fs::write(
+		&cmake_path,
+		CMakeGenerator.generate_build_file(Language::Cpp, "demo"),
+	)
+	.unwrap();
+	generator.add_to_cmake(&cmake_path).unwrap();
+	generator.add_to_cmake(&cmake_path).unwrap();
+	let cmake = fs::read_to_string(&cmake_path).unwrap();
+	assert_eq!(cmake.matches("add_custom_target(cppcheck").count(), 1);
+	assert_eq!(cmake.matches("add_dependencies(lint cppcheck)").count(), 1);
+
+	let makefile_path = temp_dir.path().join("Makefile");
+	fs::write(
+		&makefile_path,
+		MakefileGenerator.generate_build_file(Language::Cpp, "demo"),
+	)
+	.unwrap();
+	generator.add_to_makefile(&makefile_path).unwrap();
+	generator.add_to_makefile(&makefile_path).unwrap();
+	let makefile = fs::read_to_string(&makefile_path).unwrap();
+	assert_eq!(makefile.matches("lint-cppcheck:").count(), 1);
+	assert_eq!(
+		makefile
+			.matches("lint: format-check lint-clang-tidy lint-cppcheck")
+			.count(),
+		1
+	);
+	assert_eq!(makefile.matches(".PHONY:").count(), 1);
 }

@@ -38,6 +38,10 @@ pub trait LanguageConsts {
 			LDFLAGS =\n\
 			LDLIBS =\n\
 			\n\
+			# Code quality tools (override via environment or make variables)\n\
+			CLANG_FORMAT ?= clang-format\n\
+			CLANG_TIDY ?= clang-tidy\n\
+			\n\
 			# Directories\n\
 			SRC_DIR = src\n\
 			INCLUDE_DIR = include\n\
@@ -69,7 +73,25 @@ pub trait LanguageConsts {
 			# Rebuild\n\
 			rebuild: clean all\n\
 			\n\
-			.PHONY: all clean run rebuild\n",
+			# Format sources with clang-format\n\
+			format:\n\
+				\t@command -v $(CLANG_FORMAT) >/dev/null 2>&1 || (echo \"$(CLANG_FORMAT) not found; install clang-format\" >&2; exit 1)\n\
+				\t@$(CLANG_FORMAT) --style=file -i $(FORMAT_SOURCES)\n\
+			\n\
+			# Check formatting without modifying files\n\
+			format-check:\n\
+				\t@command -v $(CLANG_FORMAT) >/dev/null 2>&1 || (echo \"$(CLANG_FORMAT) not found; install clang-format\" >&2; exit 1)\n\
+				\t@$(CLANG_FORMAT) --style=file --dry-run --Werror $(FORMAT_SOURCES)\n\
+			\n\
+			# Run clang-tidy static analysis\n\
+			lint-clang-tidy:\n\
+				\t@command -v $(CLANG_TIDY) >/dev/null 2>&1 || (echo \"$(CLANG_TIDY) not found; install clang-tidy\" >&2; exit 1)\n\
+				\t@$(CLANG_TIDY) --quiet $(SRCS) -- $(CPPFLAGS) $(CXXFLAGS) $(CFLAGS)\n\
+			\n\
+			# Check formatting and run static analysis\n\
+			lint: format-check lint-clang-tidy\n\
+			\n\
+			.PHONY: all clean run rebuild format format-check lint lint-clang-tidy\n",
 			compiler_variable,
 			compiler,
 			flags_variable,
@@ -120,6 +142,7 @@ fn makefile_source_block(extension: &str) -> String {
 		.map(|ext| format!("-name '*.{ext}'"))
 		.collect::<Vec<_>>()
 		.join(" -o ");
+	let format_name_tests = format_name_tests();
 	let mut rules = String::new();
 	for ext in extensions {
 		let compiler = makefile_compiler_variable(if is_cpp_extension(ext) { "cpp" } else { "c" });
@@ -133,9 +156,20 @@ fn makefile_source_block(extension: &str) -> String {
 	format!(
 		"SRCS = $(sort $(shell find $(SRC_DIR) -type f \\( {name_tests} \\) -print))\n\
 		OBJS = $(addprefix $(BUILD_DIR)/,$(addsuffix .o,$(patsubst $(SRC_DIR)/%,%,$(basename $(SRCS)))))\n\
+		FORMAT_SOURCES = $(sort $(shell find $(SRC_DIR) $(INCLUDE_DIR) tests -type f \\( {format_name_tests} \\) -print 2>/dev/null))\n\
 		\n\
 		{rules}"
 	)
+}
+
+fn format_name_tests() -> String {
+	[
+		"c", "cc", "cpp", "cxx", "c++", "h", "hh", "hpp", "hxx", "h++", "inl", "ipp", "tpp",
+	]
+	.iter()
+	.map(|ext| format!("-iname '*.{ext}'"))
+	.collect::<Vec<_>>()
+	.join(" -o ")
 }
 
 fn is_cpp_extension(extension: &str) -> bool {
@@ -241,7 +275,7 @@ impl LanguageConsts for Language {
 				"#include <iostream>\n\n\
                  int main()\n\
                  {\n\
-                 \tstd::cout << \"Hello, World!\" << std::endl;\n\
+                 \tstd::cout << \"Hello, World!\\n\";\n\
                  \treturn 0;\n\
                  }\n",
 			),

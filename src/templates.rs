@@ -200,6 +200,30 @@ pub fn generate_vscode_tasks_config_for(build_system: BuildSystem) -> String {
 					\"args\": [\"rebuild\"],\n\
 					\"options\": {{\"cwd\": \"${{workspaceFolder}}\"}},\n\
 					\"problemMatcher\": [\"{problem_matcher}\"]\n\
+				}},\n\
+				{{\n\
+					\"label\": \"format\",\n\
+					\"type\": \"process\",\n\
+					\"command\": \"make\",\n\
+					\"args\": [\"format\"],\n\
+					\"options\": {{\"cwd\": \"${{workspaceFolder}}\"}},\n\
+					\"problemMatcher\": []\n\
+				}},\n\
+				{{\n\
+					\"label\": \"format-check\",\n\
+					\"type\": \"process\",\n\
+					\"command\": \"make\",\n\
+					\"args\": [\"format-check\"],\n\
+					\"options\": {{\"cwd\": \"${{workspaceFolder}}\"}},\n\
+					\"problemMatcher\": []\n\
+				}},\n\
+				{{\n\
+					\"label\": \"lint\",\n\
+					\"type\": \"process\",\n\
+					\"command\": \"make\",\n\
+					\"args\": [\"lint\"],\n\
+					\"options\": {{\"cwd\": \"${{workspaceFolder}}\"}},\n\
+					\"problemMatcher\": [\"{problem_matcher}\"]\n\
 				}}\n\
 			]\n\
 		}}\n"
@@ -222,6 +246,24 @@ pub fn generate_vscode_tasks_config_for(build_system: BuildSystem) -> String {
 					\"label\": \"rebuild\",\n\
 					\"type\": \"shell\",\n\
 					\"command\": \"cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --clean-first\",\n\
+					\"problemMatcher\": [\"{problem_matcher}\"]\n\
+				}},\n\
+				{{\n\
+					\"label\": \"format\",\n\
+					\"type\": \"shell\",\n\
+					\"command\": \"cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --target format\",\n\
+					\"problemMatcher\": []\n\
+				}},\n\
+				{{\n\
+					\"label\": \"format-check\",\n\
+					\"type\": \"shell\",\n\
+					\"command\": \"cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --target format-check\",\n\
+					\"problemMatcher\": []\n\
+				}},\n\
+				{{\n\
+					\"label\": \"lint\",\n\
+					\"type\": \"shell\",\n\
+					\"command\": \"cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --target lint\",\n\
 					\"problemMatcher\": [\"{problem_matcher}\"]\n\
 				}}\n\
 			]\n\
@@ -256,6 +298,18 @@ pub fn generate_readme(project_name: &str, language: Language) -> String {
 		### Rebuilding\n\
 		```bash\n\
 		make rebuild\n\
+		```\n\n\
+		### Formatting and linting\n\
+		```bash\n\
+		make format          # Format sources with clang-format\n\
+		make format-check    # Check formatting without writing\n\
+		make lint            # Format check + clang-tidy\n\
+		```\n\n\
+		With CMake, use the matching build targets:\n\
+		```bash\n\
+		cmake --build build --target format\n\
+		cmake --build build --target format-check\n\
+		cmake --build build --target lint\n\
 		```\n\n\
 		## Project Structure\n\n\
 		```\n\

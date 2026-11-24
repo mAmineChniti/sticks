@@ -38,6 +38,9 @@ fn test_create_project_c() {
 	let makefile_content = fs::read_to_string("Makefile").unwrap();
 	assert!(makefile_content.contains("CC ?="));
 
+	let clang_tidy = fs::read_to_string(".clang-tidy").unwrap();
+	assert!(clang_tidy.contains("Checks:"));
+
 	env::set_current_dir(&original_dir).unwrap();
 	fs::remove_dir_all(&temp_dir).ok();
 }

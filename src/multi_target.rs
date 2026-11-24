@@ -806,7 +806,7 @@ fn is_make_recipe_line(line: &str) -> bool {
 fn is_make_utility_target(name: &str) -> bool {
 	matches!(
 		name,
-		"all" | "clean" | "run" | "rebuild" | "test" | "lint" | "docs" | "install-deps"
+		"all" | "clean" | "run" | "rebuild" | "test" | "lint" | "format" | "format-check" | "lint-clang-tidy" | "lint-cppcheck" | "docs" | "install-deps"
 	)
 }
 

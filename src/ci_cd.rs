@@ -65,6 +65,7 @@ impl CiCdGenerator {
 		let gitlab_test_install = gitlab_test_install_snippet(&test_configuration.frameworks);
 		let gitlab_test_step = gitlab_test_step(build_system, &test_configuration);
 		let clang_tidy = clang_tidy_command(build_system, language);
+		let clang_format = clang_format_command(build_system);
 		let cmake_tools = distro_install_snippet(&build_tool_packages(true, true));
 		let make_tools = distro_install_snippet(&build_tool_packages(false, false));
 		let tidy_only = distro_install_snippet(&build_tool_packages(false, true));
@@ -96,12 +97,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install clang-tidy
+    - name: Install lint tools
       run: {tidy_only}
 {github_test_install}    - name: Configure build context
       run: |
         {package_setup}
         {cmake_configure}
+    - name: Check formatting
+      run: |
+        {clang_format}
     - name: Run clang-tidy
       run: |
         {clang_tidy}
@@ -111,6 +115,7 @@ jobs:
 				github_test_install = github_test_install,
 				github_test_step = github_test_step,
 				clang_tidy = clang_tidy,
+				clang_format = clang_format,
 				cmake_tools = cmake_tools,
 				tidy_only = tidy_only,
 			),
@@ -141,8 +146,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install clang-tidy
+    - name: Install lint tools
       run: {tidy_only}
+    - name: Check formatting
+      run: |
+        {clang_format}
     - name: Run clang-tidy
       run: |
         {clang_tidy}
@@ -151,6 +159,7 @@ jobs:
 				github_test_install = github_test_install,
 				github_test_step = github_test_step,
 				clang_tidy = clang_tidy,
+				clang_format = clang_format,
 				make_tools = make_tools,
 				tidy_only = tidy_only,
 			),
@@ -182,6 +191,8 @@ lint:
       {package_setup}
 {gitlab_test_install}    - {cmake_configure}
     - |
+      {clang_format}
+    - |
       {clang_tidy}
 "#,
 				package_setup = package_setup,
@@ -189,6 +200,7 @@ lint:
 				gitlab_test_install = gitlab_test_install,
 				gitlab_test_step = gitlab_test_step,
 				clang_tidy = clang_tidy,
+				clang_format = clang_format,
 				cmake_tools = cmake_tools,
 			),
 			(CiPlatform::GitLabCI, BuildSystem::Makefile) => format!(
@@ -214,13 +226,19 @@ lint:
   stage: lint
   script:
     - |
+      {tidy_only}
+    - |
+      {clang_format}
+    - |
       {clang_tidy}
 "#,
 				package_setup = package_setup,
 				gitlab_test_install = gitlab_test_install,
 				gitlab_test_step = gitlab_test_step,
 				clang_tidy = clang_tidy,
+				clang_format = clang_format,
 				make_tools = make_tools,
+				tidy_only = tidy_only,
 			),
 		}
 	}
@@ -451,6 +469,7 @@ fn build_tool_packages(with_cmake: bool, with_tidy: bool) -> DistroPackages {
 	}
 	if with_tidy {
 		apt.push("clang-tidy");
+		apt.push("clang-format");
 		apt.push("python3-venv");
 		dnf.push("clang-tools-extra");
 		dnf.push("python3");
@@ -557,6 +576,18 @@ fn gitlab_test_step(build_system: BuildSystem, configuration: &TestConfiguration
 			"    - ctest --test-dir build --no-tests=error --output-on-failure\n".to_string()
 		}
 		BuildSystem::Makefile => "    - make test\n".to_string(),
+	}
+}
+
+fn clang_format_command(build_system: BuildSystem) -> String {
+	let files = r"find src include -type f \( -iname '*.c' -o -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' -o -iname '*.c++' -o -iname '*.h' -o -iname '*.hpp' -o -iname '*.hh' -o -iname '*.hxx' -o -iname '*.h++' \)";
+	match build_system {
+		BuildSystem::CMake => format!(
+			"if cmake --build build --target help 2>/dev/null | grep -q 'format-check'; then cmake --build build --target format-check; else {files} -exec clang-format --dry-run --Werror {{}} +; fi"
+		),
+		BuildSystem::Makefile => format!(
+			"if make -n format-check >/dev/null 2>&1; then make format-check; else {files} -exec clang-format --dry-run --Werror {{}} +; fi"
+		),
 	}
 }
 

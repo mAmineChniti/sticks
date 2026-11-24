@@ -132,7 +132,10 @@ pub fn generate_cmake_presets(include_conan: bool, ninja: bool) -> String {
 		"configurePresets": configure,
 		"buildPresets": [
 			{"name": "debug", "configurePreset": "debug"},
-			{"name": "release", "configurePreset": "release"}
+			{"name": "release", "configurePreset": "release"},
+			{"name": "format", "configurePreset": "debug", "targets": ["format"]},
+			{"name": "format-check", "configurePreset": "debug", "targets": ["format-check"]},
+			{"name": "lint", "configurePreset": "debug", "targets": ["lint"]}
 		],
 		"testPresets": [
 			{"name": "debug", "configurePreset": "debug", "output": {"outputOnFailure": true}},
@@ -202,6 +205,9 @@ pub fn merge_cmake_presets(content: &str, include_conan: bool, ninja: bool) -> R
 		vec![
 			json!({"name": "debug", "configurePreset": "debug"}),
 			json!({"name": "release", "configurePreset": "release"}),
+			json!({"name": "format", "configurePreset": "debug", "targets": ["format"]}),
+			json!({"name": "format-check", "configurePreset": "debug", "targets": ["format-check"]}),
+			json!({"name": "lint", "configurePreset": "debug", "targets": ["lint"]}),
 		],
 	)?;
 	merge_array(

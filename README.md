@@ -35,7 +35,8 @@
 - 🔨 **Smart Structure** - Auto-generates organized project structure with source files and build configs
 - 📦 **Dependency Management** - Easily add/remove dependencies across Makefile, CMake, Conan and vcpkg
 - 🔧 **Multi-Source Support** - Add multiple source files (build files auto-discover `src/` via glob/`find`, no manual edit needed)
-- 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, Clang-format config, VSCode settings (VSCode files only when `code` is installed)
+- 📝 **Auto-Generated Config** - Creates .gitignore, .editorconfig, clang-format/clang-tidy configs, VSCode settings (VSCode files only when `code` is installed)
+- 🧹 **Built-in Quality Targets** - Generated Makefile and CMake projects expose `format`, `format-check` and `lint` targets (clang-format + clang-tidy)
 - 🔄 **Verified Self-Update** - `sticks update` downloads the release binary only after checking it against the published `SHA256SUMS`
 - 🔨 **Build & Run** - `sticks build`, `sticks run`, `sticks test` and `sticks clean` drive the project's real build system (Make or CMake, Ninja when available)
 - 🔍 **`sticks doctor`** - Read-only environment check: compilers, make/cmake/ninja, git, curl, conan, vcpkg
@@ -309,9 +310,24 @@ sticks test               # ctest (CMake) or `make test` (Makefile)
 sticks clean              # Remove build artifacts
 ```
 
+Generated projects also expose code-quality targets:
+
+```bash
+# Makefile projects
+make format          # Format sources with clang-format
+make format-check    # Verify formatting without writing
+make lint            # format-check + clang-tidy
+
+# CMake projects
+cmake --build build --target format
+cmake --build build --target format-check
+cmake --build build --target lint
+```
+
 CMake projects also get a standard `CMakePresets.json` (`debug`/`release`
-configure, build and test presets), so `cmake --preset debug && cmake
---build --preset debug` and IDE integrations work without sticks.
+configure, build and test presets, plus `format`, `format-check` and `lint`
+build presets), so `cmake --preset debug && cmake --build --preset debug`
+and IDE integrations work without sticks.
 
 ### Safe edits
 
@@ -326,7 +342,7 @@ sticks feature convert --dry-run cmake
 Modified files are automatically backed up to `<file>.sticks.bak` before
 being overwritten, and repeated commands are idempotent. `sticks eject`
 moves sticks-specific files (`.vscode/`, `CMakePresets.json`,
-`.clang-format`, …) to `.sticks.bak` backups, leaving a plain project that
+`.clang-format`, `.clang-tidy`, …) to `.sticks.bak` backups, leaving a plain project that
 builds without sticks.
 
 ### Adding Source Files
@@ -629,9 +645,9 @@ This adds:
 
 When you create a project, Sticks automatically generates:
 
-- **Build System Files:** `Makefile` or `CMakeLists.txt` (your choice)
+- **Build System Files:** `Makefile` or `CMakeLists.txt` (your choice), including `format`, `format-check` and `lint` targets
 - **Git:** `.gitignore`, `.gitattributes` (pre-configured for C/C++), auto-initializes git repository (if git is installed)
-- **Code Style:** `.editorconfig`, `.clang-format` (consistent formatting)
+- **Code Style:** `.editorconfig`, `.clang-format`, `.clang-tidy` (consistent formatting and lint rules)
 - **IDE:** VSCode `.vscode/settings.json`, `launch.json`, `tasks.json` (if VS Code is installed)
 - **Documentation:** `README.md` (project-specific template)
 

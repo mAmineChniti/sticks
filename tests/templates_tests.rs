@@ -88,6 +88,9 @@ fn test_generate_vscode_tasks_config() {
 	assert!(tasks.contains("\"version\": \"2.0.0\""));
 	assert!(tasks.contains("\"label\": \"build\""));
 	assert!(tasks.contains("\"label\": \"rebuild\""));
+	assert!(tasks.contains("\"label\": \"format\""));
+	assert!(tasks.contains("\"label\": \"format-check\""));
+	assert!(tasks.contains("\"label\": \"lint\""));
 	assert!(tasks.contains("cmake"));
 	assert!(tasks.contains("problemMatcher"));
 }

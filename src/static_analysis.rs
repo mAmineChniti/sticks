@@ -87,18 +87,25 @@ FormatStyle: file
 			}
 		};
 		if !configured {
+			let has_lint_target = content.contains("add_custom_target(lint)");
 			let target = match self.tool {
 				StaticAnalysisTool::ClangTidy => {
 					"\nfind_program(CLANG_TIDY clang-tidy)\nif(CLANG_TIDY)\n    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n    set(CMAKE_C_CLANG_TIDY \"${CLANG_TIDY}\")\n    set(CMAKE_CXX_CLANG_TIDY \"${CLANG_TIDY}\")\nendif()\n"
+						.to_string()
 				}
-				StaticAnalysisTool::Cppcheck => {
-					"\nfind_program(CPPCHECK cppcheck)\nif(CPPCHECK)\n    add_custom_target(cppcheck\n        COMMAND ${CPPCHECK} --enable=all --inconclusive --suppressions-list=${CMAKE_CURRENT_SOURCE_DIR}/cppcheck.xml src\n        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}\n        COMMENT \"Running cppcheck\"\n        VERBATIM\n    )\nendif()\n"
-				}
+				StaticAnalysisTool::Cppcheck => format!(
+					"\nfind_program(CPPCHECK cppcheck)\nif(CPPCHECK)\n    add_custom_target(cppcheck\n        COMMAND ${{CPPCHECK}} --enable=all --inconclusive --suppressions-list=${{CMAKE_CURRENT_SOURCE_DIR}}/cppcheck.xml src\n        WORKING_DIRECTORY ${{CMAKE_CURRENT_SOURCE_DIR}}\n        COMMENT \"Running cppcheck\"\n        VERBATIM\n    )\n{}endif()\n",
+					if has_lint_target {
+						"    add_dependencies(lint cppcheck)\n"
+					} else {
+						""
+					}
+				),
 			};
 			if matches!(self.tool, StaticAnalysisTool::ClangTidy) {
-				insert_before_targets(&mut content, target);
+				insert_before_targets(&mut content, &target);
 			} else {
-				content.push_str(target);
+				content.push_str(&target);
 			}
 		}
 		write_atomic(cmake_path, &content).context("Failed to write CMakeLists.txt")

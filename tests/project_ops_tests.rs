@@ -21,6 +21,24 @@ fn fresh_presets_contain_debug_release_build_test() {
 }
 
 #[test]
+fn fresh_presets_include_quality_targets() {
+	let content = generate_cmake_presets(false, false);
+	let root: serde_json::Value = serde_json::from_str(&content).unwrap();
+	let names: Vec<&str> = root["buildPresets"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.filter_map(|preset| preset["name"].as_str())
+		.collect();
+	for name in ["format", "format-check", "lint"] {
+		assert!(
+			names.contains(&name),
+			"missing {name} build preset: {names:?}"
+		);
+	}
+}
+
+#[test]
 fn fresh_presets_include_conan_when_requested() {
 	let content = generate_cmake_presets(true, false);
 	assert!(content.contains("conan_toolchain.cmake"));

@@ -107,6 +107,7 @@ impl BuildSystemGenerator for CMakeGenerator {
 			"if(NOT MSVC)\n\tset({warning_flags} \"${{{warning_flags}}} -Wall -Wextra -Werror\")\nendif()\n"
 		);
 		let cpp_standard = CppStandard::default().to_cmake_flag();
+		let quality_block = code_quality_block();
 		match language {
 			Language::C => format!(
 				"cmake_minimum_required(VERSION 3.21)\n\
@@ -117,12 +118,13 @@ impl BuildSystemGenerator for CMakeGenerator {
 				set(CMAKE_C_STANDARD_REQUIRED ON)\n\
 				{flags_guard}\
 				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
+				set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n\
 				\n\
 				file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS \"src/*.c\")\n\
 				\n\
 				add_executable(${{PROJECT_NAME}} ${{SOURCES}})\n\
 				target_include_directories(${{PROJECT_NAME}} PRIVATE \"${{CMAKE_CURRENT_SOURCE_DIR}}/include\")\n\
-				\n\
+				{quality_block}\
 				# Optional: Installation\n\
 				install(TARGETS ${{PROJECT_NAME}} DESTINATION bin)\n"
 			),
@@ -135,12 +137,13 @@ impl BuildSystemGenerator for CMakeGenerator {
 				set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\
 				{flags_guard}\
 				set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/bin)\n\
+				set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n\
 				\n\
 				file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS \"src/*.cpp\" \"src/*.cc\" \"src/*.cxx\" \"src/*.c++\" \"src/*.C\" \"src/*.CPP\" \"src/*.CC\" \"src/*.CXX\")\n\
 				\n\
 				add_executable(${{PROJECT_NAME}} ${{SOURCES}})\n\
 				target_include_directories(${{PROJECT_NAME}} PRIVATE \"${{CMAKE_CURRENT_SOURCE_DIR}}/include\")\n\
-				\n\
+				{quality_block}\
 				# Optional: Installation\n\
 				install(TARGETS ${{PROJECT_NAME}} DESTINATION bin)\n"
 			),
@@ -150,6 +153,57 @@ impl BuildSystemGenerator for CMakeGenerator {
 	fn extension(&self) -> &'static str {
 		"CMakeLists.txt"
 	}
+}
+
+fn code_quality_block() -> &'static str {
+	r#"
+# Code quality: format, format-check and lint targets
+find_program(CLANG_FORMAT NAMES clang-format)
+find_program(CLANG_TIDY NAMES clang-tidy)
+if(CLANG_FORMAT)
+    file(GLOB_RECURSE FORMAT_SOURCES CONFIGURE_DEPENDS
+        "src/*.c" "src/*.cc" "src/*.cpp" "src/*.cxx" "src/*.c++"
+        "include/*.h" "include/*.hh" "include/*.hpp" "include/*.hxx" "include/*.h++"
+        "tests/*.c" "tests/*.cc" "tests/*.cpp" "tests/*.cxx" "tests/*.c++"
+        "tests/*.h" "tests/*.hh" "tests/*.hpp" "tests/*.hxx" "tests/*.h++")
+    add_custom_target(format
+        COMMAND ${CLANG_FORMAT} --style=file -i ${FORMAT_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Formatting C/C++ sources with clang-format"
+        VERBATIM)
+    add_custom_target(format-check
+        COMMAND ${CLANG_FORMAT} --style=file --dry-run --Werror ${FORMAT_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Checking C/C++ formatting with clang-format"
+        VERBATIM)
+else()
+    add_custom_target(format
+        COMMAND ${CMAKE_COMMAND} -E echo "clang-format not found; install clang-format"
+        COMMAND ${CMAKE_COMMAND} -E false
+        VERBATIM)
+    add_custom_target(format-check
+        COMMAND ${CMAKE_COMMAND} -E echo "clang-format not found; install clang-format"
+        COMMAND ${CMAKE_COMMAND} -E false
+        VERBATIM)
+endif()
+
+if(CLANG_TIDY)
+    add_custom_target(lint-clang-tidy
+        COMMAND ${CLANG_TIDY} --quiet -p ${CMAKE_BINARY_DIR} ${SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Running clang-tidy"
+        VERBATIM)
+else()
+    add_custom_target(lint-clang-tidy
+        COMMAND ${CMAKE_COMMAND} -E echo "clang-tidy not found; install clang-tidy"
+        COMMAND ${CMAKE_COMMAND} -E false
+        VERBATIM)
+endif()
+
+add_custom_target(lint)
+add_dependencies(lint format-check lint-clang-tidy)
+
+"#
 }
 
 pub fn get_generator(build_system: BuildSystem) -> Box<dyn BuildSystemGenerator> {

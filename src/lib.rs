@@ -172,6 +172,7 @@ fn create_project_in(
 		root.join(".gitignore"),
 		root.join(".editorconfig"),
 		root.join(".clang-format"),
+		root.join(".clang-tidy"),
 		root.join("README.md"),
 		root.join(".gitattributes"),
 	];
@@ -248,6 +249,13 @@ fn create_project_in(
 	write_new_file(
 		&root.join(".clang-format"),
 		&templates::generate_clang_format_config(language),
+	)?;
+	write_new_file(
+		&root.join(".clang-tidy"),
+		&static_analysis::StaticAnalysisGenerator::new(
+			static_analysis::StaticAnalysisTool::ClangTidy,
+		)
+		.generate_config(),
 	)?;
 
 	if vscode_available {

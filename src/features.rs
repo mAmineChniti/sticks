@@ -368,6 +368,7 @@ fn remove_vcpkg_makefile_integration(content: &str) -> String {
 const EJECT_CANDIDATES: &[&str] = &[
 	".vscode",
 	".clang-format",
+	".clang-tidy",
 	".editorconfig",
 	".gitattributes",
 	"CMakePresets.json",
@@ -436,6 +437,7 @@ pub fn list_features() -> Result<()> {
 	let has_vscode = Path::new(".vscode").exists();
 	let has_gitignore = Path::new(".gitignore").exists();
 	let has_clang_format = Path::new(".clang-format").exists();
+	let has_clang_tidy = Path::new(".clang-tidy").exists();
 
 	println!("  Src directory:    {}", if has_src { "✓" } else { "✗" });
 	println!(
@@ -450,6 +452,10 @@ pub fn list_features() -> Result<()> {
 	println!(
 		"  .clang-format:    {}",
 		if has_clang_format { "✓" } else { "✗" }
+	);
+	println!(
+		"  .clang-tidy:      {}",
+		if has_clang_tidy { "✓" } else { "✗" }
 	);
 
 	println!("\n");

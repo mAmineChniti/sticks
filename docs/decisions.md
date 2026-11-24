@@ -46,8 +46,8 @@ a `--no-backup` escape hatch can be added if it annoys users.
 
 ## D7 — `sticks eject` scope
 
-Removes `.vscode/`, `.clang-format`, `.editorconfig`, `.gitattributes`,
-`CMakePresets.json` (to `.sticks.bak`). Build files and package-manager
+Removes `.vscode/`, `.clang-format`, `.clang-tidy`, `.editorconfig`,
+`.gitattributes`, `CMakePresets.json` (to `.sticks.bak`). Build files and package-manager
 manifests are already plain standards — kept untouched. Conan users who
 relied on the generated preset can regenerate it with `conan install`.
 
@@ -75,3 +75,13 @@ needs considerably newer toolchains. `sticks config set-cpp-standard`
 still allows 11, 14, 17, 20 or 23 per project. `Standard` in
 `.clang-format` must use clang-format's lowercase spelling; C projects
 omit it because clang-format has no C standard values.
+
+## D11 — Default quality targets
+
+Generated Makefiles and CMakeLists expose `format`, `format-check` and
+`lint` targets. `lint` runs the formatting check plus clang-tidy; cppcheck
+stays opt-in through `sticks lint add cppcheck`. The tools are optional at
+configure/build time: targets print an install hint and fail only when
+invoked, so a machine without clang-format/clang-tidy can still build.
+`.clang-tidy` is generated alongside `.clang-format` and both are ejected
+by `sticks eject`.
