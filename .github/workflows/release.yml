@@ -1,11 +1,11 @@
 name: Release Packages
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
     branches:
       - master
-    paths:
-      - 'Cargo.toml'
   release:
     types: [created]
   workflow_dispatch:
@@ -17,6 +17,7 @@ jobs:
   check-version:
     name: Check Version
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master')
     permissions:
       contents: read
     outputs:
@@ -25,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -55,12 +57,13 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: check-version
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    if: (needs.check-version.outputs.should_release == 'true' || github.event_name == 'release') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master'))
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Install Rust
@@ -75,12 +78,13 @@ jobs:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     needs: [check-version, test]
-    if: needs.check-version.outputs.should_release == 'true'
+    if: needs.check-version.outputs.should_release == 'true' && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master'))
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Install Rust
@@ -101,10 +105,11 @@ jobs:
     permissions:
       contents: read
     needs: [check-version, test]
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    if: (needs.check-version.outputs.should_release == 'true' || github.event_name == 'release') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master'))
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Install Rust
@@ -136,7 +141,7 @@ jobs:
     permissions:
       contents: read
     needs: [check-version, test]
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    if: (needs.check-version.outputs.should_release == 'true' || github.event_name == 'release') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master'))
     strategy:
       matrix:
         target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, armv7-unknown-linux-gnueabihf]
@@ -144,6 +149,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Install Rust
@@ -204,7 +210,7 @@ jobs:
     permissions:
       contents: read
     needs: [check-version, test]
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    if: (needs.check-version.outputs.should_release == 'true' || github.event_name == 'release') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master'))
     strategy:
       matrix:
         target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
@@ -212,6 +218,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Install Rust
@@ -245,7 +252,7 @@ jobs:
     permissions:
       contents: read
     needs: [check-version, test]
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    if: (needs.check-version.outputs.should_release == 'true' || github.event_name == 'release') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master'))
     strategy:
       matrix:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
@@ -253,6 +260,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: Install Rust
@@ -284,7 +292,7 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [check-version, test, build-deb, build-binary, build-windows, build-macos]
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'release'
+    if: (needs.check-version.outputs.should_release == 'true' || github.event_name == 'release') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master'))
     permissions:
       contents: write
     steps:
