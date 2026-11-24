@@ -718,13 +718,10 @@ fn is_cmake_source_token(value: &str) -> bool {
 		&& !matches!(
 			value,
 			"STATIC"
-				| "SHARED"
-				| "MODULE"
+				| "SHARED" | "MODULE"
 				| "INTERFACE"
-				| "ALIAS"
-				| "IMPORTED"
-				| "WIN32"
-				| "MACOSX_BUNDLE"
+				| "ALIAS" | "IMPORTED"
+				| "WIN32" | "MACOSX_BUNDLE"
 				| "EXCLUDE_FROM_ALL"
 		)
 }
@@ -809,15 +806,10 @@ fn is_make_recipe_line(line: &str) -> bool {
 fn is_make_utility_target(name: &str) -> bool {
 	matches!(
 		name,
-		"all"
-			| "clean" | "run"
-			| "rebuild"
-			| "test" | "lint"
-			| "format"
-			| "format-check"
-			| "lint-clang-tidy"
-			| "lint-cppcheck"
-			| "docs" | "install-deps"
+		"all" | "clean" | "run" | "rebuild" | "test" | "lint" | "docs" | "install-deps"
+	) || matches!(
+		name,
+		"format" | "format-check" | "lint-clang-tidy" | "lint-cppcheck"
 	)
 }
 
@@ -825,14 +817,11 @@ fn is_make_meta_target(name: &str) -> bool {
 	matches!(
 		name,
 		"ifeq"
-			| "ifneq"
-			| "ifdef"
+			| "ifneq" | "ifdef"
 			| "ifndef"
-			| "else"
-			| "endif"
+			| "else" | "endif"
 			| "define"
-			| "endef"
-			| "export"
+			| "endef" | "export"
 			| "unexport"
 			| "undefine"
 			| "override"
@@ -1103,26 +1092,11 @@ fn validate_dependency_name(dependency: &str) -> Result<()> {
 				|| matches!(
 					character,
 					'&' | '|'
-						| '>'
-						| '<'
-						| '('
-						| ')'
-						| '\\'
-						| ';'
-						| '$'
-						| '`'
-						| '"'
-						| '\''
-						| '#'
-						| '!'
-						| '?'
-						| '*'
-						| '['
-						| ']'
-						| '{'
-						| '}'
-						| '~'
-						| '%'
+						| '>' | '<' | '(' | ')'
+						| '\\' | ';' | '$' | '`'
+						| '"' | '\'' | '#' | '!'
+						| '?' | '*' | '[' | ']'
+						| '{' | '}' | '~' | '%'
 				)
 		}) {
 		bail!("Invalid target dependency: {}", dependency);
